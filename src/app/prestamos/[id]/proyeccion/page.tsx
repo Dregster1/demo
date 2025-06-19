@@ -317,19 +317,21 @@ export default function ProyeccionPagos() {
                                         <GenerarRecibo
                                             prestamoId={id as string}
                                             prestamoData={{
-                                                nombre: prestamo.nombre,
-                                                dpi: prestamo.dpi,
-                                                codigo_cliente: prestamo.codigo_cliente,
-                                                monto: prestamo.monto,
-                                                interes: prestamo.interes,
-                                                fecha_inicio: prestamo.fecha_inicio
+                                                nombre: prestamo?.nombre ?? '',
+                                                dpi: prestamo?.dpi ?? '',
+                                                codigo_cliente: prestamo?.codigo_cliente ?? '',
+                                                monto: prestamo?.monto ?? 0,
+                                                interes: prestamo?.interes ?? 0,
+                                                fecha_inicio: prestamo?.fecha_inicio ?? ''
+
                                             }}
                                             pagoData={{
                                                 numero: pago.numero,
                                                 monto: pago.monto,
                                                 fecha: pago.fecha,
-                                                saldo_anterior: prestamo.monto * (1 + prestamo.interes / 100) - (pago.monto * (pago.numero - 1)),
-                                                saldo_restante: prestamo.monto * (1 + prestamo.interes / 100) - (pago.monto * pago.numero)
+                                                saldo_anterior: (prestamo?.monto ?? 0) * (1 + (prestamo?.interes ?? 0) / 100) - (pago.monto * (pago.numero - 1)),
+                                                saldo_restante: (prestamo?.monto ?? 0) * (1 + (prestamo?.interes ?? 0) / 100) - (pago.monto * pago.numero)
+
                                             }}
                                             className="text-sm"
                                         />
