@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 
 export default function Home() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-900">
+    <div className="flex items-center justify-center min-h-screen bg-[#a1b98a]">
       <motion.h1
         initial={{ y: 0 }}
         animate={{ y: [-4, 4, -4] }}

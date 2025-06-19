@@ -71,8 +71,8 @@ export default function NuevoBien() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center px-4">
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 w-full max-w-md shadow-lg">
+    <div className="min-h-screen bg-[#a1b98a] text-white flex items-center justify-center px-4">
+      <div className="bg-[#1f2d1b] border border-gray-700 rounded-lg p-8 w-full max-w-md shadow-lg">
         <h1 className="text-2xl font-semibold mb-6 text-center text-white">Añadir Bien</h1>
         
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -82,7 +82,7 @@ export default function NuevoBien() {
               type="text"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              className="w-full p-3 rounded bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-3 rounded bg-[#e6f2da] placeholder-gray-500 text-black focus:outline-none focus:ring-2 focus:ring-black"
               required
             />
           </div>
@@ -95,7 +95,7 @@ export default function NuevoBien() {
               min="0"
               value={valor}
               onChange={(e) => setValor(e.target.value)}
-              className="w-full p-3 rounded bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-3 rounded bg-[#e6f2da] placeholder-gray-500 text-black focus:outline-none focus:ring-2 focus:ring-black"
               required
             />
           </div>
@@ -105,7 +105,7 @@ export default function NuevoBien() {
             <select
               value={tipo}
               onChange={(e) => setTipo(e.target.value)}
-              className="w-full p-3 rounded bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full p-3 rounded bg-[#e6f2da] placeholder-gray-500 text-black focus:outline-none focus:ring-2 focus:ring-black"
             >
               <option value="activo">Activo</option>
               <option value="pasivo">Pasivo</option>
@@ -118,7 +118,7 @@ export default function NuevoBien() {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded transition ${
+            className={`w-full bg-green-700 hover:bg-green-900 text-white font-semibold py-2 px-4 rounded transition ${
               isLoading ? 'opacity-70 cursor-not-allowed' : ''
             }`}
           >
