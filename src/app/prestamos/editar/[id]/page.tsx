@@ -4,10 +4,26 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
 
+interface FormData {
+  nombre: string;
+  dpi: string;
+  codigo_cliente: string;
+  telefono: string;
+  monto: string;
+  interes: string;
+  plazo: string;
+  fecha_inicio: string;
+  frecuencia_pago: 'diario' | 'semanal' | 'quincenal' | 'mensual';
+  estado: 'pendiente' | 'pagado' | 'vencido' | 'moroso';
+  porcentaje_mora: number;
+  monto_mora: number;
+  mora_aplicada: boolean;
+}
+
 export default function EditarPrestamo() {
   const { id } = useParams();
   const router = useRouter();
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     nombre: '',
     dpi: '',
     codigo_cliente: '',
@@ -15,8 +31,12 @@ export default function EditarPrestamo() {
     monto: '',
     interes: '',
     plazo: '',
-    fecha_inicio: '',
-    estado: 'pendiente'
+    fecha_inicio: new Date().toISOString().split('T')[0],
+    frecuencia_pago: 'mensual',
+    estado: 'pendiente',
+    porcentaje_mora: 10,
+    monto_mora: 0,
+    mora_aplicada: false,
   });
 
   const [mensaje, setMensaje] = useState('');
@@ -44,8 +64,12 @@ export default function EditarPrestamo() {
           monto: data.monto.toString(),
           interes: data.interes.toString(),
           plazo: data.plazo.toString(),
-          fecha_inicio: data.fecha_inicio.split('T')[0], // Formatear fecha para input date
-          estado: data.estado
+          fecha_inicio: data.fecha_inicio.split('T')[0],
+          frecuencia_pago: data.frecuencia_pago,
+          estado: data.estado,
+          porcentaje_mora: data.porcentaje_mora || 10,
+          monto_mora: data.monto_mora || 0,
+          mora_aplicada: data.mora_aplicada || false,
         });
 
       } catch (error: any) {
@@ -80,18 +104,30 @@ export default function EditarPrestamo() {
         throw new Error('El DPI debe contener exactamente 13 dígitos');
       }
 
+      // Validación de porcentaje de mora
+      if (isNaN(formData.porcentaje_mora)) {
+        throw new Error('El porcentaje de mora debe ser un número válido');
+      }
+      if (formData.porcentaje_mora < 0) {
+        throw new Error('El porcentaje de mora no puede ser negativo');
+      }
+
       const { error } = await supabase
         .from('prestamos')
         .update({
           nombre: formData.nombre.trim(),
           dpi: formData.dpi.trim(),
-          codigo_cliente: formData.codigo_cliente.trim(),
+          codigo_cliente: formData.codigo_cliente.trim() || null,
           telefono: formData.telefono.trim(),
-          monto: parseFloat(formData.monto) || 0,
-          interes: parseFloat(formData.interes) || 0,
-          plazo: parseInt(formData.plazo) || 0,
+          monto: parseFloat(formData.monto),
+          interes: parseFloat(formData.interes),
+          plazo: parseInt(formData.plazo),
           fecha_inicio: formData.fecha_inicio,
+          frecuencia_pago: formData.frecuencia_pago,
           estado: formData.estado,
+          porcentaje_mora: formData.porcentaje_mora,
+          monto_mora: formData.monto_mora,
+          mora_aplicada: formData.mora_aplicada,
           actualizado_en: new Date().toISOString(),
         })
         .eq('id', id);
@@ -99,14 +135,26 @@ export default function EditarPrestamo() {
       if (error) throw error;
 
       setMensaje('✅ Préstamo actualizado correctamente');
-      // Redirigir después de 1.5 segundos
       setTimeout(() => router.push('/prestamos'), 1500);
 
     } catch (error: any) {
-      console.error('Error completo:', error);
+      console.error('Error al actualizar:', error);
       setMensaje(`❌ Error: ${error.message || 'Ocurrió un error al actualizar'}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Función para recalcular mora
+  const recalcularMora = () => {
+    if (confirm('¿Recalcular mora con el nuevo porcentaje?')) {
+      const nuevaMora = parseFloat(formData.monto) * (formData.porcentaje_mora / 100);
+      setFormData({
+        ...formData,
+        monto_mora: nuevaMora,
+        estado: 'moroso',
+        mora_aplicada: true
+      });
     }
   };
 
@@ -180,78 +228,145 @@ export default function EditarPrestamo() {
               required
               value={formData.telefono}
               onChange={handleChange}
-              className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600"
+              minLength={8}
+              className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600 focus:border-black focus:outline-none"
             />
           </div>
 
-          {/* Campo Monto */}
+          {/* Campo Porcentaje de Mora */}
           <div>
-            <label htmlFor="monto" className="block text-sm font-medium mb-1">
-              Monto ($)
+            <label htmlFor="porcentaje_mora" className="block text-sm font-medium mb-1">
+              Porcentaje de Mora (%)
             </label>
             <input
-              id="monto"
-              name="monto"
+              id="porcentaje_mora"
+              name="porcentaje_mora"
               type="number"
-              placeholder="Monto"
-              min="0"
-              step="0.01"
-              value={formData.monto}
-              onChange={handleChange}
-              className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600"
-            />
-          </div>
-
-          {/* Campo Interés */}
-          <div>
-            <label htmlFor="interes" className="block text-sm font-medium mb-1">
-              Interés (%)
-            </label>
-            <input
-              id="interes"
-              name="interes"
-              type="number"
-              placeholder="Interés"
-              min="0"
-              max="100"
               step="0.1"
-              value={formData.interes}
+              min="0"
+              value={formData.porcentaje_mora}
               onChange={handleChange}
-              className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600"
+              className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600 focus:border-black focus:outline-none"
             />
           </div>
 
-          {/* Campo Plazo */}
-          <div>
-            <label htmlFor="plazo" className="block text-sm font-medium mb-1">
-              Plazo (meses)
-            </label>
-            <input
-              id="plazo"
-              name="plazo"
-              type="number"
-              placeholder="Plazo"
-              min="1"
-              value={formData.plazo}
-              onChange={handleChange}
-              className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600"
-            />
+          {/* Mostrar información de mora si aplica */}
+          {(formData.estado === 'moroso' || formData.estado === 'vencido') && (
+            <div className="bg-red-900/30 p-3 rounded-lg">
+              <p className="text-red-300">
+                <span className="font-medium">Mora aplicada:</span> Q{formData.monto_mora.toFixed(2)}
+              </p>
+              <p className="text-red-400 font-medium">
+                <span className="font-medium">Total con mora:</span> Q{(Number(formData.monto) + Number(formData.monto_mora)).toFixed(2)}
+              </p>
+              <button
+                type="button"
+                onClick={recalcularMora}
+                className="mt-2 bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-sm"
+                disabled={formData.estado !== 'vencido' && formData.estado !== 'moroso'}
+              >
+                Recalcular Mora
+              </button>
+            </div>
+          )}
+
+          {/* Grupo de campos numéricos */}
+          <div className="grid grid-cols-3 gap-4">
+            {/* Campo Monto */}
+            <div>
+              <label htmlFor="monto" className="block text-sm font-medium mb-1">
+                Monto (Q)
+              </label>
+              <input
+                id="monto"
+                name="monto"
+                type="number"
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+                required
+                value={formData.monto}
+                onChange={handleChange}
+                className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600 focus:border-black focus:outline-none"
+              />
+            </div>
+
+            {/* Campo Interés */}
+            <div>
+              <label htmlFor="interes" className="block text-sm font-medium mb-1">
+                Interés (%)
+              </label>
+              <input
+                id="interes"
+                name="interes"
+                type="number"
+                placeholder="0.0"
+                min="0"
+                max="100"
+                step="0.1"
+                required
+                value={formData.interes}
+                onChange={handleChange}
+                className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600 focus:border-black focus:outline-none"
+              />
+            </div>
+
+            {/* Campo Plazo */}
+            <div>
+              <label htmlFor="plazo" className="block text-sm font-medium mb-1">
+                Plazo (meses)
+              </label>
+              <input
+                id="plazo"
+                name="plazo"
+                type="number"
+                placeholder="0"
+                min="1"
+                required
+                value={formData.plazo}
+                onChange={handleChange}
+                className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600 focus:border-black focus:outline-none"
+              />
+            </div>
           </div>
 
-          {/* Campo Fecha */}
-          <div>
-            <label htmlFor="fecha_inicio" className="block text-sm font-medium mb-1">
-              Fecha de inicio *
-            </label>
-            <input
-              id="fecha_inicio"
-              name="fecha_inicio"
-              type="date"
-              required
-              value={formData.fecha_inicio}
-              onChange={handleChange}
-              className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600"
-            />
+          {/* Grupo de campos de fecha y frecuencia */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Campo Fecha de Inicio */}
+            <div>
+              <label htmlFor="fecha_inicio" className="block text-sm font-medium mb-1">
+                Fecha de inicio *
+              </label>
+              <input
+                id="fecha_inicio"
+                name="fecha_inicio"
+                type="date"
+                required
+                value={formData.fecha_inicio}
+                onChange={handleChange}
+                className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600 focus:border-black focus:outline-none"
+              />
+            </div>
+
+            {/* Campo Frecuencia de Pago */}
+            <div>
+              <label htmlFor="frecuencia_pago" className="block text-sm font-medium mb-1">
+                Frecuencia de pago *
+              </label>
+              <select
+                id="frecuencia_pago"
+                name="frecuencia_pago"
+                required
+                value={formData.frecuencia_pago}
+                onChange={handleChange}
+                className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600 focus:border-black focus:outline-none"
+              >
+                <option value="diario">Diario</option>
+                <option value="semanal">Semanal</option>
+                <option value="quincenal">Quincenal</option>
+                <option value="mensual">Mensual</option>
+              </select>
+            </div>
           </div>
 
           {/* Campo Estado */}
@@ -264,12 +379,13 @@ export default function EditarPrestamo() {
               name="estado"
               value={formData.estado}
               onChange={handleChange}
-              className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600"
+              className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600 focus:border-black focus:outline-none"
               required
             >
               <option value="pendiente">Pendiente</option>
               <option value="pagado">Pagado</option>
               <option value="vencido">Vencido</option>
+              <option value="moroso">Moroso</option>
             </select>
           </div>
 

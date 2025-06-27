@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import BuscadorPrestamos from '@/app/components/BuscadorPrestamos';
+
 
 interface Prestamo {
   id: string;
@@ -15,7 +17,10 @@ interface Prestamo {
   interes: number;
   plazo: number;
   fecha_inicio: string;
-  estado: 'pendiente' | 'pagado' | 'vencido';
+  porcentaje_mora: number;
+  mora_aplicada: boolean;
+  monto_mora: number;
+  estado: 'pendiente' | 'pagado' | 'vencido' | 'moroso';
   creado_en: string;
   fecha_vencimiento: string;
 }
@@ -25,8 +30,11 @@ export default function ListaPrestamos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [terminoBusqueda, setTerminoBusqueda] = useState('');
+  const [busquedaActiva, setBusquedaActiva] = useState(false);
+  const [resultadosBusqueda, setResultadosBusqueda] = useState<Prestamo[]>([]);
   const router = useRouter();
-
+  const [moraInfo, setMoraInfo] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
   const [ordenMonto, setOrdenMonto] = useState<'mayor' | 'menor' | null>(null);
   const [ordenFecha, setOrdenFecha] = useState<'reciente' | 'antiguo'>('reciente');
@@ -34,6 +42,8 @@ export default function ListaPrestamos() {
   useEffect(() => {
     cargarPrestamos();
   }, [filtroEstado, ordenMonto, ordenFecha]);
+
+
 
   const cargarPrestamos = async () => {
     try {
@@ -68,7 +78,11 @@ export default function ListaPrestamos() {
     } finally {
       setLoading(false);
     }
+
+
   };
+
+
 
   const handleEliminar = async (id: string) => {
     if (!confirm('¿Estás seguro de que deseas eliminar este préstamo?')) {
@@ -93,6 +107,30 @@ export default function ListaPrestamos() {
     }
   };
 
+  const handleBuscar = async (termino: string) => {
+    if (!termino.trim()) {
+      setBusquedaActiva(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('prestamos')
+        .select('*')
+        .ilike('nombre', `%${termino}%`);
+
+      if (error) throw error;
+
+      setResultadosBusqueda(data || []);
+      setBusquedaActiva(true);
+    } catch (err: any) {
+      setError(err.message || 'Error al buscar préstamos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   if (error) {
     return (
@@ -112,7 +150,9 @@ export default function ListaPrestamos() {
   return (
     <main className="p-6 bg-[#94ab7e] min-h-screen text-white">
       <div className="flex justify-between items-center mb-6">
+        
         <h1 className="text-3xl font-semibold">Lista de Préstamos</h1>
+
         <Link
           href="/prestamos/nuevo"
           className="bg-green-700 hover:bg-green-900 text-white px-4 py-2 rounded"
@@ -170,20 +210,40 @@ export default function ListaPrestamos() {
         </div>
       </div>
 
+      <div className="mb-4">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Buscar por nombre..."
+            value={terminoBusqueda}
+            onChange={(e) => {
+              setTerminoBusqueda(e.target.value);
+              handleBuscar(e.target.value);
+            }}
+            className="w-full p-2 pl-10 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500"
+          />
+          <div className="absolute left-3 top-2.5 text-gray-400">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+        </div>
+      </div>
+
       {/* Lista de Préstamos */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 ">
-        {prestamos.length > 0 ? (
-          prestamos.map((prestamo) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        {(busquedaActiva ? resultadosBusqueda : prestamos).length > 0 ? (
+          (busquedaActiva ? resultadosBusqueda : prestamos).map((prestamo) => (
             <div
               key={prestamo.id}
-              className={` bg-[#1f2d1b] border-[#75ad69] rounded-lg p-5 shadow-black border ${prestamo.estado === 'vencido' ? 'border-red-500' :
-                  prestamo.estado === 'pagado' ? 'border-green-500' : 'border-black'
+              className={`bg-[#1f2d1b] border-[#75ad69] rounded-lg p-5 shadow-black border ${prestamo.estado === 'vencido' ? 'border-red-500' :
+                prestamo.estado === 'pagado' ? 'border-green-500' : 'border-black'
                 } hover:border-yellow-400 transition duration-200 relative`}
             >
-              <div className="flex justify-between items-start mb-2 ">
+              <div className="flex justify-between items-start mb-2">
                 <h2 className="text-xl font-bold text-[#8fc57e]">{prestamo.nombre}</h2>
                 <span className={`text-xs px-2 py-1 rounded ${prestamo.estado === 'vencido' ? 'bg-red-900 text-red-300' :
-                    prestamo.estado === 'pagado' ? 'bg-green-900 text-green-300' : 'bg-blue-900 text-blue-300'
+                  prestamo.estado === 'pagado' ? 'bg-green-900 text-green-300' : 'bg-blue-900 text-blue-300'
                   }`}>
                   {prestamo.estado.toUpperCase()}
                 </span>
@@ -210,18 +270,30 @@ export default function ListaPrestamos() {
                 <p className="text-gray-300">
                   <span className="font-medium text-white">Plazo:</span> {prestamo.plazo} meses
                 </p>
+                {(prestamo.estado === 'vencido' || prestamo.estado === 'moroso') && (
+                  <>
+                    <p className="text-red-300">
+                      <span className="font-medium text-white">Mora:</span> {prestamo.porcentaje_mora || 0}%
+                    </p>
+                    <p className="text-red-300">
+                      <span className="font-medium text-white">Monto mora:</span> Q{(prestamo.monto_mora || 0).toFixed(2)}
+                    </p>
+                    <p className="text-red-400 font-medium">
+                      <span className="font-medium text-white">Total a pagar:</span> Q{(Number(prestamo.monto) + Number(prestamo.monto_mora || 0)).toFixed(2)}
+                    </p>
+                  </>
+                )}
                 <p className="text-gray-400">
                   <span className="font-medium text-white">Inicio:</span> {new Date(prestamo.fecha_inicio).toLocaleDateString()}
                 </p>
                 <p className="text-gray-400">
                   <span className="font-medium text-white">Vencimiento:</span> {new Date(prestamo.fecha_vencimiento).toLocaleDateString()}
                 </p>
-                {/* Mostrar también la fecha de creación si es relevante */}
                 <p className="text-gray-500 text-xs">
                   <span className="font-medium">Registrado:</span> {new Date(prestamo.creado_en).toLocaleDateString()}
                 </p>
               </div>
-
+                
               <div className="flex justify-end space-x-2 pt-2 border-t border-gray-700">
                 <Link
                   href={`/prestamos/editar/${prestamo.id}`}
@@ -248,7 +320,7 @@ export default function ListaPrestamos() {
           ))
         ) : (
           <div className="col-span-full text-center text-white py-8">
-            No hay préstamos registrados
+            {busquedaActiva ? 'No se encontraron préstamos' : 'No hay préstamos registrados'}
           </div>
         )}
       </div>

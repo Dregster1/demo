@@ -7,13 +7,14 @@ import { useRouter } from 'next/navigation';
 interface FormData {
   nombre: string;
   dpi: string;
-  codigo_cliente: string;
+  codigo_cliente: string ;
   telefono: string;
   monto: string;
   interes: string;
   plazo: string;
   fecha_inicio: string;
   frecuencia_pago: 'diario' | 'semanal' | 'quincenal' | 'mensual';
+  porcentaje_mora: number;
 }
 
 export default function NuevoPrestamo() {
@@ -27,7 +28,8 @@ export default function NuevoPrestamo() {
     interes: '',
     plazo: '',
     fecha_inicio: new Date().toISOString().split('T')[0],
-    frecuencia_pago: 'mensual'
+    frecuencia_pago: 'mensual',
+    porcentaje_mora: 10,
   });
 
   const [mensaje, setMensaje] = useState('');
@@ -59,10 +61,22 @@ export default function NuevoPrestamo() {
         throw new Error('El teléfono debe tener al menos 8 dígitos');
       }
 
+      if (isNaN(formData.porcentaje_mora)) {
+        throw new Error('El porcentaje de mora debe ser un número válido');
+      }
+      if (formData.porcentaje_mora < 0) {
+        throw new Error('El porcentaje de mora no puede ser negativo');
+      }
+      if (formData.porcentaje_mora > 100) {
+        throw new Error('El porcentaje de mora no puede ser mayor a 100');
+      }
+
       // Validación de montos numéricos
       if (isNaN(parseFloat(formData.monto)) || isNaN(parseFloat(formData.interes)) || isNaN(parseInt(formData.plazo))) {
         throw new Error('Los campos numéricos deben contener valores válidos');
       }
+
+
 
       const { error } = await supabase.from('prestamos').insert([
         {
@@ -77,7 +91,10 @@ export default function NuevoPrestamo() {
           frecuencia_pago: formData.frecuencia_pago,
           estado: 'pendiente',
           creado_en: new Date().toISOString(),
-          fecha_vencimiento: calcularFechaVencimiento(formData.fecha_inicio, parseInt(formData.plazo))
+          fecha_vencimiento: calcularFechaVencimiento(formData.fecha_inicio, parseInt(formData.plazo)),
+          porcentaje_mora: formData.porcentaje_mora, // Asegúrate de incluir este campo
+          mora_aplicada: false, // Valor inicial
+          monto_mora: 0 // Valor inicial
         }
       ]);
 
@@ -173,6 +190,22 @@ export default function NuevoPrestamo() {
               onChange={handleChange}
               minLength={8}
               className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black focus:border-black focus:outline-none placeholder-gray-500"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Porcentaje de Mora (%)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              name="porcentaje_mora" // Agrega name para usar handleChange
+              value={formData.porcentaje_mora}
+              onChange={handleChange} // Usa el mismo manejador que los demás campos
+              className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black focus:border-black focus:outline-none placeholder-gray-500"
+              placeholder="Ej: 10"
             />
           </div>
 
@@ -279,18 +312,16 @@ export default function NuevoPrestamo() {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full py-2 rounded font-medium mt-4 ${
-              isLoading ? 'bg-green-700 cursor-not-allowed' : 'bg-green-700 hover:bg-green-900'
-            }`}
+            className={`w-full py-2 rounded font-medium mt-4 ${isLoading ? 'bg-green-700 cursor-not-allowed' : 'bg-green-700 hover:bg-green-900'
+              }`}
           >
             {isLoading ? 'Guardando...' : 'Guardar Préstamo'}
           </button>
 
           {/* Mensaje de estado */}
           {mensaje && (
-            <p className={`text-center mt-4 ${
-              mensaje.includes('✅') ? 'text-green-400' : 'text-red-400'
-            }`}>
+            <p className={`text-center mt-4 ${mensaje.includes('✅') ? 'text-green-400' : 'text-red-400'
+              }`}>
               {mensaje}
             </p>
           )}

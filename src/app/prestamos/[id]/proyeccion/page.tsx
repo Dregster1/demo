@@ -11,8 +11,9 @@ interface Pago {
     numero: number;
     fecha: string;
     monto: number;
-    estado: 'pendiente' | 'pagado' | 'vencido';
-    id?: string; // Añadido para el ID del pago
+    estado: 'pendiente' | 'pagado' | 'vencido' | 'moroso';
+    id?: string;
+    esMora?: boolean;
 }
 
 interface Prestamo {
@@ -26,6 +27,10 @@ interface Prestamo {
     dpi: string;
     codigo_cliente: string | null;
     telefono: string;
+    porcentaje_mora: number;
+    monto_mora: number;
+    mora_aplicada: boolean;
+    estado: 'pendiente' | 'pagado' | 'vencido' | 'moroso';
 }
 
 export default function ProyeccionPagos() {
@@ -59,7 +64,10 @@ export default function ProyeccionPagos() {
                     prestamoData.plazo,
                     prestamoData.monto,
                     prestamoData.interes,
-                    prestamoData.frecuencia_pago
+                    prestamoData.frecuencia_pago,
+                    prestamoData.porcentaje_mora,
+                    prestamoData.mora_aplicada,
+                    prestamoData.monto_mora
                 );
 
                 setPagos(proyeccion);
@@ -73,22 +81,33 @@ export default function ProyeccionPagos() {
         if (id) cargarDatos();
     }, [id]);
 
-    // Función para generar la proyección de pagos
+    // Función para generar la proyección de pagos con mora
     const generarProyeccionPagos = (
         fechaInicio: string,
         plazoMeses: number,
         montoTotal: number,
         interes: number,
-        frecuencia: 'diario' | 'semanal' | 'quincenal' | 'mensual'
+        frecuencia: 'diario' | 'semanal' | 'quincenal' | 'mensual',
+        porcentajeMora: number,
+        moraAplicada: boolean,
+        montoMora: number
     ): Pago[] => {
         const pagos: Pago[] = [];
         const fechaInicioObj = new Date(fechaInicio);
-        const montoPago = calcularMontoPago(montoTotal, interes, plazoMeses, frecuencia);
         let fechaPago = new Date(fechaInicioObj);
+        const hoy = new Date();
+
+        // Calcular monto total con interés
+        const montoConInteres = montoTotal * (1 + interes / 100);
+        
+        // Si hay mora aplicada, agregarla al monto total
+        const montoTotalConMora = moraAplicada ? montoConInteres + montoMora : montoConInteres;
 
         // Calcular número total de pagos según frecuencia
         const totalPagos = calcularTotalPagos(plazoMeses, frecuencia);
+        const montoPago = parseFloat((montoTotalConMora / totalPagos).toFixed(2));
 
+        // Generar pagos normales
         for (let i = 1; i <= totalPagos; i++) {
             // Calcular fecha del pago según frecuencia
             switch (frecuencia) {
@@ -107,46 +126,32 @@ export default function ProyeccionPagos() {
             }
 
             // Determinar estado del pago
-            const hoy = new Date();
-            let estado: 'pendiente' | 'pagado' | 'vencido' = 'pendiente';
+            let estado: 'pendiente' | 'pagado' | 'vencido' | 'moroso' = 'pendiente';
             if (fechaPago < hoy) estado = 'vencido';
+            if (moraAplicada && estado === 'vencido') estado = 'moroso';
 
             pagos.push({
                 numero: i,
                 fecha: fechaPago.toISOString().split('T')[0],
                 monto: montoPago,
                 estado,
-                id: `temp-${i}` // ID temporal para los pagos generados
+                id: `temp-${i}`
+            });
+        }
+
+        // Si hay mora aplicada, agregar un pago adicional por la mora
+        if (moraAplicada && montoMora > 0) {
+            pagos.push({
+                numero: totalPagos + 1,
+                fecha: fechaPago.toISOString().split('T')[0],
+                monto: montoMora,
+                estado: 'moroso',
+                id: 'mora',
+                esMora: true
             });
         }
 
         return pagos;
-    };
-
-    // Función auxiliar para calcular el monto de cada pago
-    const calcularMontoPago = (
-        montoTotal: number,
-        interes: number,
-        plazoMeses: number,
-        frecuencia: string
-    ): number => {
-        const montoConInteres = montoTotal * (1 + interes / 100);
-        let divisor = plazoMeses;
-
-        // Ajustar divisor según frecuencia
-        switch (frecuencia) {
-            case 'diario':
-                divisor *= 30; // Aproximación
-                break;
-            case 'semanal':
-                divisor *= 4;
-                break;
-            case 'quincenal':
-                divisor *= 2;
-                break;
-        }
-
-        return parseFloat((montoConInteres / divisor).toFixed(2));
     };
 
     // Función auxiliar para calcular el total de pagos
@@ -169,14 +174,19 @@ export default function ProyeccionPagos() {
     };
 
     // Función para cambiar estado de pago
-    const cambiarEstadoPago = (index: number, nuevoEstado: 'pendiente' | 'pagado' | 'vencido') => {
+    const cambiarEstadoPago = (index: number, nuevoEstado: 'pendiente' | 'pagado' | 'vencido' | 'moroso') => {
         const nuevosPagos = [...pagos];
         nuevosPagos[index].estado = nuevoEstado;
         setPagos(nuevosPagos);
-
-        // Aquí podrías guardar el cambio en Supabase si lo necesitas
     };
 
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#a1b98a] text-white flex items-center justify-center">
+                <p>Cargando proyección...</p>
+            </div>
+        );
+    }
 
     if (error) {
         return (
@@ -194,13 +204,21 @@ export default function ProyeccionPagos() {
         );
     }
 
+    if (!prestamo) {
+        return (
+            <div className="min-h-screen bg-[#a1b98a] text-white flex items-center justify-center">
+                <p>No se encontró el préstamo</p>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-[#a1b98a] text-white p-4 pt-24">
             <div className="max-w-6xl mx-auto">
                 {/* Encabezado */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
                     <h1 className="text-xl sm:text-2xl font-bold">
-                        Proyección: {prestamo?.nombre}
+                        Proyección: {prestamo.nombre}
                     </h1>
                     <Link
                         href={`/prestamos`}
@@ -215,19 +233,23 @@ export default function ProyeccionPagos() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <div className="break-words">
                             <p className="text-gray-400 text-xs sm:text-sm">Monto total</p>
-                            <p className="text-lg sm:text-xl font-semibold">Q{prestamo?.monto.toFixed(2)}</p>
+                            <p className="text-lg sm:text-xl font-semibold">Q{prestamo.monto.toFixed(2)}</p>
                         </div>
                         <div className="break-words">
                             <p className="text-gray-400 text-xs sm:text-sm">Interés</p>
-                            <p className="text-lg sm:text-xl font-semibold">{prestamo?.interes}%</p>
+                            <p className="text-lg sm:text-xl font-semibold">{prestamo.interes}%</p>
                         </div>
                         <div className="break-words">
-                            <p className="text-gray-400 text-xs sm:text-sm">Frecuencia</p>
-                            <p className="text-lg sm:text-xl font-semibold capitalize">{prestamo?.frecuencia_pago}</p>
+                            <p className="text-gray-400 text-xs sm:text-sm">Mora</p>
+                            <p className="text-lg sm:text-xl font-semibold">
+                                {prestamo.mora_aplicada ? `${prestamo.porcentaje_mora}% (Q${prestamo.monto_mora.toFixed(2)})` : 'No aplicada'}
+                            </p>
                         </div>
                         <div className="break-words">
-                            <p className="text-gray-400 text-xs sm:text-sm">Total pagos</p>
-                            <p className="text-lg sm:text-xl font-semibold">{pagos.length}</p>
+                            <p className="text-gray-400 text-xs sm:text-sm">Total a pagar</p>
+                            <p className="text-lg sm:text-xl font-semibold">
+                                Q{(prestamo.monto * (1 + prestamo.interes / 100) + (prestamo.mora_aplicada ? prestamo.monto_mora : 0)).toFixed(2)}
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -235,12 +257,20 @@ export default function ProyeccionPagos() {
                 {/* Lista de pagos - Versión móvil */}
                 <div className="sm:hidden space-y-2">
                     {pagos.map((pago, index) => (
-                        <div key={index} className="bg-[#1f2d1b] rounded-lg p-3">
+                        <div 
+                            key={index} 
+                            className={`bg-[#1f2d1b] rounded-lg p-3 ${pago.esMora ? 'border-l-4 border-red-500' : ''}`}
+                        >
                             <div className="flex justify-between items-start mb-2">
-                                <span className="font-medium">Pago #{pago.numero}</span>
-                                <span className={`px-2 py-1 rounded text-xs ${pago.estado === 'pagado' ? 'bg-green-900 text-green-300' :
-                                    pago.estado === 'vencido' ? 'bg-red-900 text-red-300' : 'bg-blue-900 text-blue-300'
-                                    }`}>
+                                <span className="font-medium">
+                                    {pago.esMora ? 'Mora' : `Pago #${pago.numero}`}
+                                </span>
+                                <span className={`px-2 py-1 rounded text-xs ${
+                                    pago.estado === 'pagado' ? 'bg-green-900 text-green-300' :
+                                    pago.estado === 'vencido' ? 'bg-red-900 text-red-300' :
+                                    pago.estado === 'moroso' ? 'bg-purple-900 text-purple-300' :
+                                    'bg-blue-900 text-blue-300'
+                                }`}>
                                     {pago.estado}
                                 </span>
                             </div>
@@ -259,17 +289,36 @@ export default function ProyeccionPagos() {
                             <div className="mt-2 grid grid-cols-2 gap-2">
                                 <select
                                     value={pago.estado}
-                                    onChange={(e) => cambiarEstadoPago(index, e.target.value as 'pendiente' | 'pagado' | 'vencido')}
+                                    onChange={(e) => cambiarEstadoPago(index, e.target.value as any)}
                                     className="w-full bg-gray-700 text-white p-1 rounded text-xs"
+                                    disabled={pago.esMora}
                                 >
                                     <option value="pendiente">Pendiente</option>
                                     <option value="pagado">Pagado</option>
                                     <option value="vencido">Vencido</option>
+                                    {pago.esMora && <option value="moroso">Moroso</option>}
                                 </select>
                                 <GenerarRecibo
                                     prestamoId={id as string}
-                                    pagoId={pago.id}
-
+                                    prestamoData={{
+                                        nombre: prestamo.nombre,
+                                        dpi: prestamo.dpi,
+                                        codigo_cliente: prestamo.codigo_cliente,
+                                        monto: prestamo.monto,
+                                        interes: prestamo.interes,
+                                        fecha_inicio: prestamo.fecha_inicio,
+                                        porcentaje_mora: prestamo.porcentaje_mora,
+                                        monto_mora: pago.esMora ? pago.monto : 0
+                                    }}
+                                    pagoData={{
+                                        numero: pago.numero,
+                                        monto: pago.monto,
+                                        fecha: pago.fecha,
+                                        saldo_anterior: calcularSaldoAnterior(index, pagos, prestamo),
+                                        saldo_restante: calcularSaldoRestante(index, pagos, prestamo),
+                                        esMora: pago.esMora
+                                    }}
+                                    className="text-sm"
                                 />
                             </div>
                         </div>
@@ -291,47 +340,62 @@ export default function ProyeccionPagos() {
                         </thead>
                         <tbody>
                             {pagos.map((pago, index) => (
-                                <tr key={index} className="border-b border-gray-700 hover:bg-gray-700/50">
-                                    <td className="p-3 text-sm">{pago.numero}</td>
-                                    <td className="p-3 text-sm">{new Date(pago.fecha).toLocaleDateString()}</td>
-                                    <td className="p-3 text-sm">Q{pago.monto.toFixed(2)}</td>
+                                <tr 
+                                    key={index} 
+                                    className={`border-b border-gray-700 hover:bg-gray-700/50 ${pago.esMora ? 'bg-purple-900/20' : ''}`}
+                                >
+                                    <td className="p-3 text-sm">
+                                        {pago.esMora ? 'Mora' : pago.numero}
+                                    </td>
+                                    <td className="p-3 text-sm">
+                                        {new Date(pago.fecha).toLocaleDateString()}
+                                    </td>
+                                    <td className="p-3 text-sm">
+                                        Q{pago.monto.toFixed(2)}
+                                    </td>
                                     <td className="p-3">
-                                        <span className={`px-2 py-1 rounded text-xs ${pago.estado === 'pagado' ? 'bg-green-900 text-green-300' :
-                                            pago.estado === 'vencido' ? 'bg-red-900 text-red-300' : 'bg-blue-900 text-blue-300'
-                                            }`}>
+                                        <span className={`px-2 py-1 rounded text-xs ${
+                                            pago.estado === 'pagado' ? 'bg-green-900 text-green-300' :
+                                            pago.estado === 'vencido' ? 'bg-red-900 text-red-300' :
+                                            pago.estado === 'moroso' ? 'bg-purple-900 text-purple-300' :
+                                            'bg-blue-900 text-blue-300'
+                                        }`}>
                                             {pago.estado}
                                         </span>
                                     </td>
                                     <td className="p-3">
                                         <select
                                             value={pago.estado}
-                                            onChange={(e) => cambiarEstadoPago(index, e.target.value as 'pendiente' | 'pagado' | 'vencido')}
+                                            onChange={(e) => cambiarEstadoPago(index, e.target.value as any)}
                                             className="bg-gray-700 text-white p-1 rounded text-sm"
+                                            disabled={pago.esMora}
                                         >
                                             <option value="pendiente">Pendiente</option>
                                             <option value="pagado">Pagado</option>
                                             <option value="vencido">Vencido</option>
+                                            {pago.esMora && <option value="moroso">Moroso</option>}
                                         </select>
                                     </td>
                                     <td className="p-3">
                                         <GenerarRecibo
                                             prestamoId={id as string}
                                             prestamoData={{
-                                                nombre: prestamo?.nombre ?? '',
-                                                dpi: prestamo?.dpi ?? '',
-                                                codigo_cliente: prestamo?.codigo_cliente ?? '',
-                                                monto: prestamo?.monto ?? 0,
-                                                interes: prestamo?.interes ?? 0,
-                                                fecha_inicio: prestamo?.fecha_inicio ?? ''
-
+                                                nombre: prestamo.nombre,
+                                                dpi: prestamo.dpi,
+                                                codigo_cliente: prestamo.codigo_cliente,
+                                                monto: prestamo.monto,
+                                                interes: prestamo.interes,
+                                                fecha_inicio: prestamo.fecha_inicio,
+                                                porcentaje_mora: prestamo.porcentaje_mora,
+                                                monto_mora: pago.esMora ? pago.monto : 0
                                             }}
                                             pagoData={{
                                                 numero: pago.numero,
                                                 monto: pago.monto,
                                                 fecha: pago.fecha,
-                                                saldo_anterior: (prestamo?.monto ?? 0) * (1 + (prestamo?.interes ?? 0) / 100) - (pago.monto * (pago.numero - 1)),
-                                                saldo_restante: (prestamo?.monto ?? 0) * (1 + (prestamo?.interes ?? 0) / 100) - (pago.monto * pago.numero)
-
+                                                saldo_anterior: calcularSaldoAnterior(index, pagos, prestamo),
+                                                saldo_restante: calcularSaldoRestante(index, pagos, prestamo),
+                                                esMora: pago.esMora
                                             }}
                                             className="text-sm"
                                         />
@@ -344,4 +408,25 @@ export default function ProyeccionPagos() {
             </div>
         </div>
     );
+}
+
+// Función auxiliar para calcular saldo anterior
+function calcularSaldoAnterior(index: number, pagos: Pago[], prestamo: Prestamo): number {
+    if (index === 0) {
+        return prestamo.monto * (1 + prestamo.interes / 100) + (prestamo.mora_aplicada ? prestamo.monto_mora : 0);
+    }
+    let saldo = prestamo.monto * (1 + prestamo.interes / 100) + (prestamo.mora_aplicada ? prestamo.monto_mora : 0);
+    for (let i = 0; i < index; i++) {
+        saldo -= pagos[i].monto;
+    }
+    return parseFloat(saldo.toFixed(2));
+}
+
+// Función auxiliar para calcular saldo restante
+function calcularSaldoRestante(index: number, pagos: Pago[], prestamo: Prestamo): number {
+    let saldo = prestamo.monto * (1 + prestamo.interes / 100) + (prestamo.mora_aplicada ? prestamo.monto_mora : 0);
+    for (let i = 0; i <= index; i++) {
+        saldo -= pagos[i].monto;
+    }
+    return parseFloat(Math.max(0, saldo).toFixed(2));
 }

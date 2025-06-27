@@ -15,14 +15,19 @@ interface GenerarReciboProps {
     fecha: string;
     saldo_anterior: number;
     saldo_restante: number;
+    esMora?: boolean;
+    
   };
   prestamoData?: {
     nombre: string;
     dpi: string;
-    codigo_cliente: string;
+    codigo_cliente: string | null;
     monto: number;
     interes: number;
     fecha_inicio: string;
+    porcentaje_mora?: number; // Añade esta línea
+  monto_mora?: number;     // Añade esta línea
+  esMora?: boolean;  
   };
   className?: string;
 }
