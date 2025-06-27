@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import BuscadorPrestamos from '@/app/components/BuscadorPrestamos';
 
 
+
 interface Prestamo {
   id: string;
   nombre: string;
@@ -38,6 +39,7 @@ export default function ListaPrestamos() {
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
   const [ordenMonto, setOrdenMonto] = useState<'mayor' | 'menor' | null>(null);
   const [ordenFecha, setOrdenFecha] = useState<'reciente' | 'antiguo'>('reciente');
+  const [vista, setVista] = useState<'tarjetas' | 'lista'>('tarjetas');
 
   useEffect(() => {
     cargarPrestamos();
@@ -151,14 +153,37 @@ export default function ListaPrestamos() {
     <main className="p-6 bg-[#94ab7e] min-h-screen text-white">
       <div className="flex justify-between items-center mb-6">
         
-        <h1 className="text-3xl font-semibold">Lista de Préstamos</h1>
 
-        <Link
-          href="/prestamos/nuevo"
-          className="bg-green-700 hover:bg-green-900 text-white px-4 py-2 rounded"
-        >
-          Nuevo Préstamo
-        </Link>
+        <div className="flex items-center gap-4">
+          {/* Toggle de vista */}
+          <div className="flex items-center bg-[#1f2d1b] p-1 rounded-lg">
+            <button
+              onClick={() => setVista('tarjetas')}
+              className={`px-3 py-1 rounded-md ${vista === 'tarjetas' ? 'bg-[#3a5a40] text-white' : 'text-gray-300'}`}
+            >
+              <svg className="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+              Tarjetas
+            </button>
+            <button
+              onClick={() => setVista('lista')}
+              className={`px-3 py-1 rounded-md ${vista === 'lista' ? 'bg-[#3a5a40] text-white' : 'text-gray-300'}`}
+            >
+              <svg className="w-5 h-5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              Lista
+            </button>
+          </div>
+
+          <Link
+            href="/prestamos/nuevo"
+            className="bg-green-700 hover:bg-green-900 text-white px-4 py-2 rounded"
+          >
+            Nuevo Préstamo
+          </Link>
+        </div>
       </div>
 
       {/* Sección de Filtros */}
@@ -231,6 +256,7 @@ export default function ListaPrestamos() {
       </div>
 
       {/* Lista de Préstamos */}
+      {vista === 'tarjetas' ? (
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {(busquedaActiva ? resultadosBusqueda : prestamos).length > 0 ? (
           (busquedaActiva ? resultadosBusqueda : prestamos).map((prestamo) => (
@@ -318,12 +344,145 @@ export default function ListaPrestamos() {
               </div>
             </div>
           ))
-        ) : (
-          <div className="col-span-full text-center text-white py-8">
-            {busquedaActiva ? 'No se encontraron préstamos' : 'No hay préstamos registrados'}
+         ) : (
+            <div className="col-span-full text-center text-white py-8">
+              {busquedaActiva ? 'No se encontraron préstamos' : 'No hay préstamos registrados'}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          {/* Vista de lista optimizada para móviles */}
+          <div className="md:hidden space-y-3">
+      {(busquedaActiva ? resultadosBusqueda : prestamos).map((prestamo) => (
+        <div key={prestamo.id} className="bg-[#1f2d1b] p-4 rounded-lg">
+          <div className="flex justify-between items-start">
+            <h3 className="font-bold text-lg">{prestamo.nombre}</h3>
+            <span className={`text-xs px-2 py-1 rounded ${
+              prestamo.estado === 'pagado' ? 'bg-green-900 text-green-300' :
+              prestamo.estado === 'moroso' ? 'bg-red-900 text-red-300' :
+              'bg-blue-900 text-blue-300'
+            }`}>
+              {prestamo.estado}
+            </span>
           </div>
-        )}
-      </div>
+          
+          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <p className="text-gray-400">Monto</p>
+              <p>Q{prestamo.monto.toFixed(2)}</p>
+            </div>
+            <div>
+              <p className="text-gray-400">Vencimiento</p>
+              <p>{new Date(prestamo.fecha_vencimiento).toLocaleDateString()}</p>
+            </div>
+            <div>
+              <p className="text-gray-400">Interés</p>
+              <p>{prestamo.interes}%</p>
+            </div>
+            <div>
+              <p className="text-gray-400">Plazo</p>
+              <p>{prestamo.plazo} meses</p>
+            </div>
+          </div>
+          
+          {/* Acciones para móvil */}
+          <div className="mt-3 flex justify-end space-x-2">
+            <Link
+              href={`/prestamos/editar/${prestamo.id}`}
+              className="bg-[#d4a94c] hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
+            >
+              Editar
+            </Link>
+            <button
+              onClick={() => handleEliminar(prestamo.id)}
+              disabled={deletingId === prestamo.id}
+              className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm ${
+                deletingId === prestamo.id ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {deletingId === prestamo.id ? 'Eliminando...' : 'Eliminar'}
+            </button>
+            <Link
+              href={`/prestamos/${prestamo.id}/proyeccion`}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+            >
+              Proyección
+            </Link>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    {/* Vista desktop - Tabla */}
+    <div className="hidden md:block bg-[#1f2d1b] rounded-lg shadow-lg">
+      <table className="min-w-full divide-y divide-gray-700">
+        <thead className="bg-[#2d3b27]">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cliente</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Monto</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Estado</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Vencimiento</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Acciones</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-700">
+          {(busquedaActiva ? resultadosBusqueda : prestamos).map((prestamo) => (
+            <tr key={prestamo.id} className="hover:bg-[#2d3b27]">
+              <td className="px-4 py-4 whitespace-nowrap">
+                <div className="text-sm font-medium">{prestamo.nombre}</div>
+                <div className="text-xs text-gray-400">{prestamo.dpi}</div>
+              </td>
+              <td className="px-4 py-4 whitespace-nowrap">
+                <div className="text-sm">Q{prestamo.monto.toFixed(2)}</div>
+                {prestamo.mora_aplicada && (
+                  <div className="text-xs text-red-400">+ Q{prestamo.monto_mora?.toFixed(2)}</div>
+                )}
+              </td>
+              <td className="px-4 py-4 whitespace-nowrap">
+                <span className={`px-2 py-1 text-xs rounded-full ${
+                  prestamo.estado === 'pagado' ? 'bg-green-900 text-green-300' :
+                  prestamo.estado === 'moroso' ? 'bg-red-900 text-red-300' :
+                  'bg-blue-900 text-blue-300'
+                }`}>
+                  {prestamo.estado}
+                </span>
+              </td>
+              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
+                {new Date(prestamo.fecha_vencimiento).toLocaleDateString()}
+              </td>
+              <td className="px-4 py-4 whitespace-nowrap">
+                <div className="flex space-x-2">
+                  <Link
+                    href={`/prestamos/editar/${prestamo.id}`}
+                    className="bg-[#d4a94c] hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
+                  >
+                    Editar
+                  </Link>
+                  <button
+                    onClick={() => handleEliminar(prestamo.id)}
+                    disabled={deletingId === prestamo.id}
+                    className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm ${
+                      deletingId === prestamo.id ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {deletingId === prestamo.id ? 'Eliminando...' : 'Eliminar'}
+                  </button>
+                  <Link
+                    href={`/prestamos/${prestamo.id}/proyeccion`}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+                  >
+                    Proyección
+                  </Link>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
     </main>
   );
 }
