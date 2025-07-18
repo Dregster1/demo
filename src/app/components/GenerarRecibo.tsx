@@ -16,7 +16,8 @@ interface GenerarReciboProps {
     saldo_anterior: number;
     saldo_restante: number;
     esMora?: boolean;
-    
+    monto_mora?: number;
+    dias_atraso?: number;
   };
   prestamoData?: {
     nombre: string;
@@ -25,9 +26,9 @@ interface GenerarReciboProps {
     monto: number;
     interes: number;
     fecha_inicio: string;
-    porcentaje_mora?: number; // Añade esta línea
-  monto_mora?: number;     // Añade esta línea
-  esMora?: boolean;  
+    porcentaje_mora?: number;
+    tipo_mora?: string;
+    monto_mora?: number;
   };
   className?: string;
 }
@@ -63,14 +64,18 @@ export const GenerarRecibo = ({
           codigo_cliente: prestamoData.codigo_cliente,
           monto: prestamoData.monto,
           interes: prestamoData.interes,
-          total: totalConInteres,
-          numero_recibo: numeroRecibo,
-          fecha_inicio: prestamoData.fecha_inicio
+          porcentaje_mora: prestamoData.porcentaje_mora || 0,
+          tipo_mora: prestamoData.tipo_mora || 'mensual',
+          fecha_inicio: prestamoData.fecha_inicio,
+          numero_recibo: numeroRecibo
         },
         pago: {
-          ...pagoData,
+          numero: pagoData.numero,
+          monto: pagoData.monto,
+          monto_mora: pagoData.monto_mora || 0,
+          dias_atraso: pagoData.dias_atraso || 0,
+          esMora: pagoData.esMora || false,
           fecha_pago: pagoData.fecha,
-          // Asegurarnos que los saldos sean correctos
           saldo_anterior: pagoData.saldo_anterior,
           saldo_restante: pagoData.saldo_restante
         }
@@ -125,13 +130,17 @@ export const GenerarRecibo = ({
           codigo_cliente: prestamoData.codigo_cliente,
           monto: prestamoData.monto,
           interes: prestamoData.interes,
-          total: totalConInteres,
-          numero_recibo: numeroRecibo,
-          fecha_inicio: prestamoData.fecha_inicio
+          porcentaje_mora: prestamoData.porcentaje_mora || 0,
+          tipo_mora: prestamoData.tipo_mora || 'mensual',
+          fecha_inicio: prestamoData.fecha_inicio,
+          numero_recibo: numeroRecibo
         },
         pago: pagoDataLocal || {
-          numero: 1,
+          numero: pagoData?.numero || 1,
           monto: pagoData?.monto || totalConInteres,
+          monto_mora: pagoData?.monto_mora || 0,
+          dias_atraso: pagoData?.dias_atraso || 0,
+          esMora: pagoData?.esMora || false,
           fecha_pago: pagoData?.fecha || new Date().toISOString(),
           saldo_restante: saldoRestante,
           saldo_anterior: saldoAnterior
@@ -162,7 +171,7 @@ export const GenerarRecibo = ({
           fileName={`recibo_${reciboData.prestamo.numero_recibo}.pdf`}
           className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs sm:text-sm block text-center"
         >
-          {({ loading }) => (loading ? 'Generando...' : 'Descargar')}
+          {({ loading }) => (loading ? 'Generando...' : 'Descargar recibo')}
         </PDFDownloadLink>
       )}
     </div>

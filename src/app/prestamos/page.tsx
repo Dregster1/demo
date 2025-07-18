@@ -3,10 +3,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/app/lib/supabase';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import BuscadorPrestamos from '@/app/components/BuscadorPrestamos';
-
-
 
 interface Prestamo {
   id: string;
@@ -24,7 +20,12 @@ interface Prestamo {
   estado: 'pendiente' | 'pagado' | 'vencido' | 'moroso';
   creado_en: string;
   fecha_vencimiento: string;
+  archivado: boolean; // Añade este nuevo campo
+  fecha_archivado?: string;
+  descripcion: string;
 }
+
+const ITEMS_POR_PAGINA = 10;
 
 export default function ListaPrestamos() {
   const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
@@ -33,17 +34,18 @@ export default function ListaPrestamos() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [terminoBusqueda, setTerminoBusqueda] = useState('');
   const [busquedaActiva, setBusquedaActiva] = useState(false);
-  const [resultadosBusqueda, setResultadosBusqueda] = useState<Prestamo[]>([]);
-  const router = useRouter();
-  const [moraInfo, setMoraInfo] = useState('');
+  const [resultadosBusqueda, setResultadosBusqueda] = useState<Prestamo[]>([])
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
   const [ordenMonto, setOrdenMonto] = useState<'mayor' | 'menor' | null>(null);
   const [ordenFecha, setOrdenFecha] = useState<'reciente' | 'antiguo'>('reciente');
-  const [vista, setVista] = useState<'tarjetas' | 'lista'>('tarjetas');
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+
+
 
   useEffect(() => {
     cargarPrestamos();
-  }, [filtroEstado, ordenMonto, ordenFecha]);
+  }, [filtroEstado, ordenMonto, ordenFecha, paginaActual]);
 
 
 
@@ -52,9 +54,14 @@ export default function ListaPrestamos() {
       setLoading(true);
       setError('');
 
+      const desde = (paginaActual - 1) * ITEMS_POR_PAGINA;
+
+      // Construir la consulta base
       let query = supabase
         .from('prestamos')
-        .select('*');
+        .select('*', { count: 'exact' })
+        .eq('archivado', false)
+        .range(desde, desde + ITEMS_POR_PAGINA - 1);
 
       // Aplicar filtro de estado
       if (filtroEstado !== 'todos') {
@@ -65,14 +72,21 @@ export default function ListaPrestamos() {
       if (ordenMonto) {
         query = query.order('monto', { ascending: ordenMonto === 'menor' });
       } else {
-        // Cambiado para ordenar por fecha_inicio en lugar de creado_en
         query = query.order('fecha_inicio', { ascending: ordenFecha === 'antiguo' });
       }
 
-      const { data, error } = await query;
+      // Ejecutar la consulta
+      const { data, error: queryError, count } = await query;
 
-      if (error) throw error;
+      if (queryError) throw queryError;
+
+      // Verificar que count no sea null
+      if (count === null) {
+        throw new Error('No se pudo obtener el conteo total de préstamos');
+      }
+
       setPrestamos(data || []);
+      setTotalPaginas(Math.ceil(count / ITEMS_POR_PAGINA));
 
     } catch (err: any) {
       console.error('Error al cargar préstamos:', err);
@@ -80,11 +94,7 @@ export default function ListaPrestamos() {
     } finally {
       setLoading(false);
     }
-
-
   };
-
-
 
   const handleEliminar = async (id: string) => {
     if (!confirm('¿Estás seguro de que deseas eliminar este préstamo?')) {
@@ -109,6 +119,21 @@ export default function ListaPrestamos() {
     }
   };
 
+  const archivarPrestamo = async (id: string) => {
+
+    try {
+      const { error } = await supabase
+        .from('prestamos')
+        .update({ archivado: true, fecha_archivado: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) throw error;
+      setPrestamos(prestamos.filter(p => p.id !== id));
+    } catch (error) {
+      console.error('Error al archivar préstamo:', error);
+    }
+  };
+
   const handleBuscar = async (termino: string) => {
     if (!termino.trim()) {
       setBusquedaActiva(false);
@@ -120,7 +145,8 @@ export default function ListaPrestamos() {
       const { data, error } = await supabase
         .from('prestamos')
         .select('*')
-        .ilike('nombre', `%${termino}%`);
+        .ilike('nombre', `%${termino}%`)
+        .eq('archivado', false);
 
       if (error) throw error;
 
@@ -133,6 +159,17 @@ export default function ListaPrestamos() {
     }
   };
 
+  const [vista, setVista] = useState<'tarjetas' | 'lista'>(() => {
+    // Solo acceder a localStorage en el cliente
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('vista-prestamos') as 'tarjetas' | 'lista' || 'tarjetas';
+    }
+    return 'tarjetas';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('vista-prestamos', vista);
+  }, [vista]);
 
   if (error) {
     return (
@@ -152,8 +189,6 @@ export default function ListaPrestamos() {
   return (
     <main className="p-6 bg-[#94ab7e] min-h-screen text-white">
       <div className="flex justify-between items-center mb-6">
-        
-
         <div className="flex items-center gap-4">
           {/* Toggle de vista */}
           <div className="flex items-center bg-[#1f2d1b] p-1 rounded-lg">
@@ -202,7 +237,7 @@ export default function ListaPrestamos() {
               <option value="todos">Todos</option>
               <option value="pendiente">Pendientes</option>
               <option value="pagado">Pagados</option>
-              <option value="vencido">Vencidos</option>
+              <option value="vencido">Morosos</option>
             </select>
           </div>
 
@@ -257,232 +292,388 @@ export default function ListaPrestamos() {
 
       {/* Lista de Préstamos */}
       {vista === 'tarjetas' ? (
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {(busquedaActiva ? resultadosBusqueda : prestamos).length > 0 ? (
-          (busquedaActiva ? resultadosBusqueda : prestamos).map((prestamo) => (
-            <div
-              key={prestamo.id}
-              className={`bg-[#1f2d1b] border-[#75ad69] rounded-lg p-5 shadow-black border ${prestamo.estado === 'vencido' ? 'border-red-500' :
-                prestamo.estado === 'pagado' ? 'border-green-500' : 'border-black'
-                } hover:border-yellow-400 transition duration-200 relative`}
-            >
-              <div className="flex justify-between items-start mb-2">
-                <h2 className="text-xl font-bold text-[#8fc57e]">{prestamo.nombre}</h2>
-                <span className={`text-xs px-2 py-1 rounded ${prestamo.estado === 'vencido' ? 'bg-red-900 text-red-300' :
-                  prestamo.estado === 'pagado' ? 'bg-green-900 text-green-300' : 'bg-blue-900 text-blue-300'
-                  }`}>
-                  {prestamo.estado.toUpperCase()}
-                </span>
-              </div>
+        <div className="space-y-6">
+          {/* Contenedor de tarjetas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            {(busquedaActiva ? resultadosBusqueda : prestamos).length > 0 ? (
+              (busquedaActiva ? resultadosBusqueda : prestamos).map((prestamo) => (
+                <div
+                  key={prestamo.id}
+                  className={`bg-[#1f2d1b] border-[#75ad69] rounded-lg p-5 shadow-black border ${prestamo.estado === 'vencido' ? 'border-red-500' :
+                      prestamo.estado === 'pagado' ? 'border-green-500' : 'border-black'
+                    } hover:border-yellow-400 transition duration-200 relative`}
+                >
+                  {/* Contenido de la tarjeta */}
+                  <div className="flex justify-between items-start mb-2">
+                    <h2 className="text-xl font-bold text-[#8fc57e]">{prestamo.nombre}</h2>
+                    <span className={`text-xs px-2 py-1 rounded ${prestamo.estado === 'vencido' ? 'bg-red-900 text-red-300' :
+                        prestamo.estado === 'pagado' ? 'bg-green-900 text-green-300' : 'bg-blue-900 text-blue-300'
+                      }`}>
+                      {prestamo.estado.toUpperCase()}
+                    </span>
+                  </div>
 
-              <div className="space-y-2 text-sm mb-4">
-                <p className="text-gray-300">
-                  <span className="font-medium text-white">DPI:</span> {prestamo.dpi}
-                </p>
-                {prestamo.codigo_cliente && (
-                  <p className="text-gray-300">
-                    <span className="font-medium text-white">Código:</span> {prestamo.codigo_cliente}
-                  </p>
-                )}
-                <p className="text-gray-300">
-                  <span className="font-medium text-white">Teléfono:</span> {prestamo.telefono}
-                </p>
-                <p className="text-gray-300">
-                  <span className="font-medium text-white">Monto:</span> Q{prestamo.monto.toFixed(2)}
-                </p>
-                <p className="text-gray-300">
-                  <span className="font-medium text-white">Interés:</span> {prestamo.interes}%
-                </p>
-                <p className="text-gray-300">
-                  <span className="font-medium text-white">Plazo:</span> {prestamo.plazo} meses
-                </p>
-                {(prestamo.estado === 'vencido' || prestamo.estado === 'moroso') && (
-                  <>
-                    <p className="text-red-300">
-                      <span className="font-medium text-white">Mora:</span> {prestamo.porcentaje_mora || 0}%
+                  <div className="space-y-2 text-sm mb-4">
+                    <p className="text-gray-300">
+                      <span className="font-medium text-white">DPI:</span> {prestamo.dpi}
                     </p>
-                    <p className="text-red-300">
-                      <span className="font-medium text-white">Monto mora:</span> Q{(prestamo.monto_mora || 0).toFixed(2)}
+                    {prestamo.codigo_cliente && (
+                      <p className="text-gray-300">
+                        <span className="font-medium text-white">Código:</span> {prestamo.codigo_cliente}
+                      </p>
+                    )}
+                    <p className="text-gray-300">
+                      <span className="font-medium text-white">Teléfono:</span> {prestamo.telefono}
                     </p>
-                    <p className="text-red-400 font-medium">
-                      <span className="font-medium text-white">Total a pagar:</span> Q{(Number(prestamo.monto) + Number(prestamo.monto_mora || 0)).toFixed(2)}
+                    <p className="text-gray-300">
+                      <span className="font-medium text-white">Monto:</span> Q{prestamo.monto.toFixed(2)}
                     </p>
-                  </>
-                )}
-                <p className="text-gray-400">
-                  <span className="font-medium text-white">Inicio:</span> {new Date(prestamo.fecha_inicio).toLocaleDateString()}
-                </p>
-                <p className="text-gray-400">
-                  <span className="font-medium text-white">Vencimiento:</span> {new Date(prestamo.fecha_vencimiento).toLocaleDateString()}
-                </p>
-                <p className="text-gray-500 text-xs">
-                  <span className="font-medium">Registrado:</span> {new Date(prestamo.creado_en).toLocaleDateString()}
-                </p>
+                    <p className="text-gray-300">
+                      <span className="font-medium text-white">Interés:</span> {prestamo.interes}%
+                    </p>
+                    <p className="text-gray-300">
+                      <span className="font-medium text-white">Plazo:</span> {prestamo.plazo} meses
+                    </p>
+                    {(prestamo.estado === 'vencido' || prestamo.estado === 'moroso') && (
+                      <>
+                        <p className="text-red-300">
+                          <span className="font-medium text-white">Mora:</span> {prestamo.porcentaje_mora || 0}%
+                        </p>
+                            
+                        <p className="text-red-400 font-medium">
+                          <span className="font-medium text-white">Total a pagar:</span> Q{(Number(prestamo.monto) + Number(prestamo.monto_mora || 0)).toFixed(2)}
+                        </p>
+                      </>
+                    )}
+                    <p className="text-blue-400">
+                      <span className="font-medium text-white">Descripción u observaciones:</span> {prestamo.descripcion || 'Ninguna'}
+                    </p>
+                    <p className="text-gray-400">
+                      <span className="font-medium text-white">Inicio:</span> {new Date(prestamo.fecha_inicio).toLocaleDateString()}
+                    </p>
+                    <p className="text-gray-400">
+                      <span className="font-medium text-white">Vencimiento:</span> {new Date(prestamo.fecha_vencimiento).toLocaleDateString()}
+                    </p>
+                    <p className="text-gray-500 text-xs">
+                      <span className="font-medium">Registrado:</span> {new Date(prestamo.creado_en).toLocaleDateString()}
+                    </p>
+
+                  </div>
+
+
+                  <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-gray-700">
+                    {/* Botón Archivar - Primera fila en móvil */}
+                    <button
+                      onClick={() => archivarPrestamo(prestamo.id)}
+                      className="bg-gray-600 hover:bg-gray-800 text-white px-3 py-1 rounded text-sm"
+                    >
+                      Archivar
+                    </button>
+
+                    {/* Botón Editar - Primera fila en móvil */}
+                    <Link
+                      href={`/prestamos/editar/${prestamo.id}`}
+                      className="bg-[#d4a94c] hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
+                    >
+                      Editar
+                    </Link>
+
+                    {/* Botón Eliminar - Segunda fila en móvil */}
+                    <button
+                      onClick={() => handleEliminar(prestamo.id)}
+                      disabled={deletingId === prestamo.id}
+                      className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm ${deletingId === prestamo.id ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                    >
+                      {deletingId === prestamo.id ? 'Eliminando...' : 'Eliminar'}
+                    </button>
+
+                    {/* Botón Proyección - Segunda fila en móvil */}
+                    <Link
+                      href={`/prestamos/${prestamo.id}/proyeccion`}
+                      className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+                    >
+                      Proyección
+                    </Link>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-full text-center text-white py-8">
+                {busquedaActiva ? 'No se encontraron préstamos' : 'No hay préstamos registrados'}
               </div>
-                
-              <div className="flex justify-end space-x-2 pt-2 border-t border-gray-700">
-                <Link
-                  href={`/prestamos/editar/${prestamo.id}`}
-                  className="bg-[#d4a94c] hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
-                >
-                  Editar
-                </Link>
-                <button
-                  onClick={() => handleEliminar(prestamo.id)}
-                  disabled={deletingId === prestamo.id}
-                  className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm ${deletingId === prestamo.id ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                >
-                  {deletingId === prestamo.id ? 'Eliminando...' : 'Eliminar'}
-                </button>
-                <Link
-                  href={`/prestamos/${prestamo.id}/proyeccion`}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
-                >
-                  Proyección
-                </Link>
-              </div>
+            )}
+          </div>
+
+          {/* Controles de paginación - FUERA del grid */}
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6">
+            <div>
+              <span className="text-sm text-gray-600">
+                Mostrando {(paginaActual - 1) * ITEMS_POR_PAGINA + 1} -{' '}
+                {Math.min(paginaActual * ITEMS_POR_PAGINA, (totalPaginas * ITEMS_POR_PAGINA))} de{' '}
+                {totalPaginas * ITEMS_POR_PAGINA} préstamos
+              </span>
             </div>
-          ))
-         ) : (
-            <div className="col-span-full text-center text-white py-8">
-              {busquedaActiva ? 'No se encontraron préstamos' : 'No hay préstamos registrados'}
+
+            <div className="flex gap-2 flex-wrap justify-center">
+              <button
+                onClick={() => setPaginaActual(1)}
+                disabled={paginaActual === 1}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setPaginaActual(p => Math.max(p - 1, 1))}
+                disabled={paginaActual === 1}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Anterior
+              </button>
+
+              {Array.from({ length: Math.min(5, totalPaginas) }, (_, i) => {
+                const pagina = paginaActual <= 3
+                  ? i + 1
+                  : Math.min(paginaActual + i - 2, totalPaginas);
+
+                return (
+                  <button
+                    key={pagina}
+                    onClick={() => setPaginaActual(pagina)}
+                    className={`px-3 py-1 border rounded ${pagina === paginaActual ? 'bg-blue-500 text-white' : ''
+                      }`}
+                  >
+                    {pagina}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))}
+                disabled={paginaActual === totalPaginas}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Siguiente
+              </button>
+              <button
+                onClick={() => setPaginaActual(totalPaginas)}
+                disabled={paginaActual === totalPaginas}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                »
+              </button>
             </div>
-          )}
+          </div>
         </div>
+
       ) : (
         <div className="overflow-x-auto">
           {/* Vista de lista optimizada para móviles */}
-          <div className="md:hidden space-y-3">
-      {(busquedaActiva ? resultadosBusqueda : prestamos).map((prestamo) => (
-        <div key={prestamo.id} className="bg-[#1f2d1b] p-4 rounded-lg">
-          <div className="flex justify-between items-start">
-            <h3 className="font-bold text-lg">{prestamo.nombre}</h3>
-            <span className={`text-xs px-2 py-1 rounded ${
-              prestamo.estado === 'pagado' ? 'bg-green-900 text-green-300' :
-              prestamo.estado === 'moroso' ? 'bg-red-900 text-red-300' :
-              'bg-blue-900 text-blue-300'
-            }`}>
-              {prestamo.estado}
-            </span>
-          </div>
-          
-          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-            <div>
-              <p className="text-gray-400">Monto</p>
-              <p>Q{prestamo.monto.toFixed(2)}</p>
-            </div>
-            <div>
-              <p className="text-gray-400">Vencimiento</p>
-              <p>{new Date(prestamo.fecha_vencimiento).toLocaleDateString()}</p>
-            </div>
-            <div>
-              <p className="text-gray-400">Interés</p>
-              <p>{prestamo.interes}%</p>
-            </div>
-            <div>
-              <p className="text-gray-400">Plazo</p>
-              <p>{prestamo.plazo} meses</p>
-            </div>
-          </div>
-          
-          {/* Acciones para móvil */}
-          <div className="mt-3 flex justify-end space-x-2">
-            <Link
-              href={`/prestamos/editar/${prestamo.id}`}
-              className="bg-[#d4a94c] hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
-            >
-              Editar
-            </Link>
-            <button
-              onClick={() => handleEliminar(prestamo.id)}
-              disabled={deletingId === prestamo.id}
-              className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm ${
-                deletingId === prestamo.id ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {deletingId === prestamo.id ? 'Eliminando...' : 'Eliminar'}
-            </button>
-            <Link
-              href={`/prestamos/${prestamo.id}/proyeccion`}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
-            >
-              Proyección
-            </Link>
-          </div>
-        </div>
-      ))}
-    </div>
+          <div className="space-y-3 md:hidden">
+            {(busquedaActiva ? resultadosBusqueda : prestamos).map((prestamo) => (
+              <div key={prestamo.id} className="bg-[#1f2d1b] p-4 rounded-lg">
+                <div className="flex justify-between items-start">
+                  <h3 className="font-bold text-lg">{prestamo.nombre}</h3>
+                  <span className={`text-xs px-2 py-1 rounded ${prestamo.estado === 'pagado' ? 'bg-green-900 text-green-300' :
+                    prestamo.estado === 'moroso' ? 'bg-red-900 text-red-300' :
+                      'bg-blue-900 text-blue-300'
+                    }`}>
+                    {prestamo.estado}
+                  </span>
+                </div>
 
-    {/* Vista desktop - Tabla */}
-    <div className="hidden md:block bg-[#1f2d1b] rounded-lg shadow-lg">
-      <table className="min-w-full divide-y divide-gray-700">
-        <thead className="bg-[#2d3b27]">
-          <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cliente</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Monto</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Estado</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Vencimiento</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Acciones</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-700">
-          {(busquedaActiva ? resultadosBusqueda : prestamos).map((prestamo) => (
-            <tr key={prestamo.id} className="hover:bg-[#2d3b27]">
-              <td className="px-4 py-4 whitespace-nowrap">
-                <div className="text-sm font-medium">{prestamo.nombre}</div>
-                <div className="text-xs text-gray-400">{prestamo.dpi}</div>
-              </td>
-              <td className="px-4 py-4 whitespace-nowrap">
-                <div className="text-sm">Q{prestamo.monto.toFixed(2)}</div>
-                {prestamo.mora_aplicada && (
-                  <div className="text-xs text-red-400">+ Q{prestamo.monto_mora?.toFixed(2)}</div>
-                )}
-              </td>
-              <td className="px-4 py-4 whitespace-nowrap">
-                <span className={`px-2 py-1 text-xs rounded-full ${
-                  prestamo.estado === 'pagado' ? 'bg-green-900 text-green-300' :
-                  prestamo.estado === 'moroso' ? 'bg-red-900 text-red-300' :
-                  'bg-blue-900 text-blue-300'
-                }`}>
-                  {prestamo.estado}
-                </span>
-              </td>
-              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
-                {new Date(prestamo.fecha_vencimiento).toLocaleDateString()}
-              </td>
-              <td className="px-4 py-4 whitespace-nowrap">
-                <div className="flex space-x-2">
+                <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-gray-400">Monto</p>
+                    <p>Q{prestamo.monto.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Vencimiento</p>
+                    <p>{new Date(prestamo.fecha_vencimiento).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Interés</p>
+                    <p>{prestamo.interes}%</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Plazo</p>
+                    <p>{prestamo.plazo} meses</p>
+                  </div>
+                </div>
+
+                {/* Acciones para móvil */}
+
+                <div className="grid grid-cols-2 gap-2 mt-3 "> {/* Solo se aplica en móvil (menos de 640px) */}
+
+                  <button
+                    onClick={() => archivarPrestamo(prestamo.id)}
+                    className="bg-gray-600 hover:bg-gray-800 text-white px-3 py-1 rounded text-sm"
+                  >
+                    Archivar
+                  </button>
                   <Link
                     href={`/prestamos/editar/${prestamo.id}`}
-                    className="bg-[#d4a94c] hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
+                    className="bg-[#d4a94c] hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm text-center"
                   >
                     Editar
                   </Link>
                   <button
                     onClick={() => handleEliminar(prestamo.id)}
                     disabled={deletingId === prestamo.id}
-                    className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm ${
-                      deletingId === prestamo.id ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
+                    className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm ${deletingId === prestamo.id ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
                   >
                     {deletingId === prestamo.id ? 'Eliminando...' : 'Eliminar'}
                   </button>
                   <Link
                     href={`/prestamos/${prestamo.id}/proyeccion`}
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm text-center"
                   >
                     Proyección
                   </Link>
+
                 </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-)}
+              </div>
+            ))}
+          </div>
+
+          {/* Vista desktop - Tabla */}
+          <div className="hidden md:block bg-[#1f2d1b] rounded-lg shadow-lg">
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-[#2d3b27]">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Cliente</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Monto</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Estado</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Vencimiento</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {(busquedaActiva ? resultadosBusqueda : prestamos).map((prestamo) => (
+                  <tr key={prestamo.id} className="hover:bg-[#2d3b27]">
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium">{prestamo.nombre}</div>
+                      <div className="text-xs text-gray-400">{prestamo.dpi}</div>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="text-sm">Q{prestamo.monto.toFixed(2)}</div>
+                      {prestamo.mora_aplicada && (
+                        <div className="text-xs text-red-400">+ Q{prestamo.monto_mora?.toFixed(2)}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs rounded-full ${prestamo.estado === 'pagado' ? 'bg-green-900 text-green-300' :
+                        prestamo.estado === 'moroso' ? 'bg-red-900 text-red-300' :
+                          'bg-blue-900 text-blue-300'
+                        }`}>
+                        {prestamo.estado}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
+                      {new Date(prestamo.fecha_vencimiento).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => archivarPrestamo(prestamo.id)}
+                          className="bg-gray-600 hover:bg-gray-800 text-white px-3 py-1 rounded text-sm"
+                        >
+                          Archivar
+                        </button>
+                        <Link
+                          href={`/prestamos/editar/${prestamo.id}`}
+                          className="bg-[#d4a94c] hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm"
+                        >
+                          Editar
+                        </Link>
+                        <button
+                          onClick={() => handleEliminar(prestamo.id)}
+                          disabled={deletingId === prestamo.id}
+                          className={`bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm ${deletingId === prestamo.id ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                        >
+                          {deletingId === prestamo.id ? 'Eliminando...' : 'Eliminar'}
+                        </button>
+                        <Link
+                          href={`/prestamos/${prestamo.id}/proyeccion`}
+                          className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+                        >
+                          Proyección
+                        </Link>
+                      </div>
+
+                    </td>
+
+                  </tr>
+
+                ))}
+              </tbody>
+
+            </table>
+
+          </div>
+          <div className="flex justify-between items-center mt-6">
+            <div>
+              <span className="text-sm text-gray-600">
+                Mostrando {(paginaActual - 1) * ITEMS_POR_PAGINA + 1} -{' '}
+                {Math.min(paginaActual * ITEMS_POR_PAGINA, (totalPaginas * ITEMS_POR_PAGINA))} de{' '}
+                {totalPaginas * ITEMS_POR_PAGINA} préstamos
+              </span>
+            </div>
+
+            <div className="flex gap-2 flex-wrap justify-center">
+              <button
+                onClick={() => setPaginaActual(1)}
+                disabled={paginaActual === 1}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setPaginaActual(p => Math.max(p - 1, 1))}
+                disabled={paginaActual === 1}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Anterior
+              </button>
+
+              {Array.from({ length: Math.min(5, totalPaginas) }, (_, i) => {
+                const pagina = paginaActual <= 3
+                  ? i + 1
+                  : Math.min(paginaActual + i - 2, totalPaginas);
+
+                return (
+                  <button
+                    key={pagina}
+                    onClick={() => setPaginaActual(pagina)}
+                    className={`px-3 py-1 border rounded ${pagina === paginaActual ? 'bg-blue-500 text-white' : ''
+                      }`}
+                  >
+                    {pagina}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))}
+                disabled={paginaActual === totalPaginas}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Siguiente
+              </button>
+              <button
+                onClick={() => setPaginaActual(totalPaginas)}
+                disabled={paginaActual === totalPaginas}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                »
+              </button>
+            </div>
+          </div>
+        </div>
+
+      )}
     </main>
   );
 }

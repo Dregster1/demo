@@ -52,6 +52,16 @@ const styles = StyleSheet.create({
     marginVertical: 5,
     textAlign: 'center',
   },
+  moraSection: {
+    backgroundColor: '#FFF0F0',
+    padding: 5,
+    marginBottom: 10,
+    borderRadius: 3,
+  },
+  moraText: {
+    color: '#FF0000',
+    fontWeight: 'bold',
+  },
 });
 
 interface ReciboProps {
@@ -61,16 +71,20 @@ interface ReciboProps {
     codigo_cliente: string;
     monto: number;
     interes: number;
-    total: number;
+    porcentaje_mora: number;
+    tipo_mora: string;
     fecha_inicio: string;
     numero_recibo: string;
   };
   pago: {
     numero: number;
     monto: number;
+    monto_mora?: number;
+    dias_atraso?: number;
     fecha_pago: string;
     saldo_anterior: number;
     saldo_restante: number;
+    esMora?: boolean;
   };
 }
 
@@ -78,7 +92,9 @@ export const ReciboPDF = ({ prestamo, pago }: ReciboProps) => (
   <Document>
     <Page size="A5" style={styles.page}>
       <View style={styles.header}>
-        <Text style={styles.title}>RECIBO DE PAGO PARCIAL</Text>
+        <Text style={styles.title}>
+          {pago.esMora ? 'RECIBO DE PAGO DE MORA' : 'RECIBO DE PAGO PARCIAL'}
+        </Text>
         <Text style={styles.subtitle}>No. {prestamo.numero_recibo}</Text>
       </View>
 
@@ -104,13 +120,37 @@ export const ReciboPDF = ({ prestamo, pago }: ReciboProps) => (
       <View style={styles.divider} />
 
       <View style={styles.section}>
+        {pago.monto_mora && pago.monto_mora > 0 && (
+          <View style={styles.moraSection}>
+            <View style={styles.row}>
+              <Text style={[styles.label, styles.moraText]}>Días de atraso:</Text>
+              <Text style={[styles.value, styles.moraText]}>{pago.dias_atraso || 0}</Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={[styles.label, styles.moraText]}>Tasa de mora:</Text>
+              <Text style={[styles.value, styles.moraText]}>
+                {prestamo.porcentaje_mora}% {prestamo.tipo_mora}
+              </Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={[styles.label, styles.moraText]}>Monto de mora:</Text>
+              <Text style={[styles.value, styles.moraText]}>Q {pago.monto_mora.toFixed(2)}</Text>
+            </View>
+          </View>
+        )}
+
         <View style={styles.row}>
           <Text style={styles.label}>Pago No.:</Text>
           <Text style={styles.value}>{pago.numero}</Text>
         </View>
         
         <View style={{ marginVertical: 10 }}>
-          <Text style={styles.amount}>MONTO DEL PAGO: Q {pago.monto.toFixed(2)}</Text>
+          <Text style={styles.amount}>
+            MONTO DEL {pago.esMora ? 'PAGO DE MORA' : 'PAGO'}: Q {pago.monto.toFixed(2)}
+            {pago.monto_mora && pago.monto_mora > 0 && (
+              <Text style={styles.moraText}> (Incluye mora: Q {pago.monto_mora.toFixed(2)})</Text>
+            )}
+          </Text>
         </View>
         
         <View style={styles.row}>

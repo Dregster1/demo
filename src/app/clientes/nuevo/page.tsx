@@ -76,7 +76,7 @@ export default function NuevoCliente() {
         onSubmit={handleSubmit}
         className="bg-[#1f2d1b] p-6 rounded-lg w-full max-w-md shadow-lg space-y-4 border border-gray-700"
       >
-        <h1 className="text-2xl font-bold text-center">Nuevo Cliente / Acreedor</h1>
+        <h1 className="text-2xl font-bold text-center">Nuevo Cliente</h1>
 
         <div className="space-y-4">
           {/* Nombre */}
@@ -162,20 +162,7 @@ export default function NuevoCliente() {
             />
           </div>
 
-          {/* Tipo */}
-          <div>
-            <label className="block text-sm mb-1">Tipo *</label>
-            <select
-              name="tipo"
-              value={formData.tipo}
-              onChange={handleChange}
-              className="w-full px-3 py-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black focus:outline-none focus:ring-2 focus:ring-black"
-              required
-            >
-              <option value="cliente">Cliente</option>
-              <option value="acreedor">Acreedor</option>
-            </select>
-          </div>
+          
 
           <button
             type="submit"

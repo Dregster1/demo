@@ -126,7 +126,8 @@ export default function Navbar() {
               { href: "/clientes", text: "Clientes" },
               { href: "/clientes/nuevo", text: "Añadir cliente" },
               { href: "/balance", text: "Balance" },
-              { href: "/balance/nuevo", text: "Añadir bienes" }
+              { href: "/balance/nuevo", text: "Añadir bienes" },
+              { href: "/registro", text: "Registro"}
             ].map((link) => (
               <li key={link.href}>
                 <Link
@@ -141,6 +142,7 @@ export default function Navbar() {
                 </Link>
               </li>
             ))}
+
 
             {/* Versión móvil del sign out */}
             {user && (

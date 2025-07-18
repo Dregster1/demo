@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 interface FormData {
   nombre: string;
   dpi: string;
-  codigo_cliente: string ;
+  codigo_cliente: string;
   telefono: string;
   monto: string;
   interes: string;
@@ -15,6 +15,9 @@ interface FormData {
   fecha_inicio: string;
   frecuencia_pago: 'diario' | 'semanal' | 'quincenal' | 'mensual';
   porcentaje_mora: number;
+  tipo_interes: 'sobre_capital' | 'sobre_saldos';
+  tipo_mora: 'diaria' | 'mensual' | 'anual';
+  descripcion? : string;
 }
 
 export default function NuevoPrestamo() {
@@ -29,13 +32,16 @@ export default function NuevoPrestamo() {
     plazo: '',
     fecha_inicio: new Date().toISOString().split('T')[0],
     frecuencia_pago: 'mensual',
-    porcentaje_mora: 10,
+    porcentaje_mora: 0,
+    tipo_interes: 'sobre_capital',
+    tipo_mora: 'mensual',
+    descripcion: '',
   });
 
   const [mensaje, setMensaje] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement  | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -94,7 +100,10 @@ export default function NuevoPrestamo() {
           fecha_vencimiento: calcularFechaVencimiento(formData.fecha_inicio, parseInt(formData.plazo)),
           porcentaje_mora: formData.porcentaje_mora, // Asegúrate de incluir este campo
           mora_aplicada: false, // Valor inicial
-          monto_mora: 0 // Valor inicial
+          monto_mora: 0, // Valor inicial
+          tipo_interes: formData.tipo_interes,
+          tipo_mora: formData.tipo_mora,
+          descripcion: formData.descripcion || null
         }
       ]);
 
@@ -193,6 +202,32 @@ export default function NuevoPrestamo() {
             />
           </div>
 
+          {/* Campo Tipo de Mora */}
+          <div className="mb-4">
+            <label htmlFor="tipo_mora" className="block text-sm font-medium mb-1">
+              Tipo de Mora *
+            </label>
+            <select
+              id="tipo_mora"
+              name="tipo_mora"
+              required
+              value={formData.tipo_mora}
+              onChange={handleChange}
+              className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black focus:border-black focus:outline-none"
+            >
+              <option value="diaria">Diaria</option>
+              <option value="mensual">Mensual</option>
+              <option value="anual">Anual</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              {formData.tipo_mora === 'diaria'
+                ? "La mora se calculará por día de atraso"
+                : formData.tipo_mora === 'mensual'
+                  ? "La mora se calculará por mes de atraso"
+                  : "La mora se calculará por año de atraso"}
+            </p>
+          </div>
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-300 mb-1">
               Porcentaje de Mora (%)
@@ -269,6 +304,29 @@ export default function NuevoPrestamo() {
             </div>
           </div>
 
+          {/* Campo Tipo de Interés */}
+          <div className="mb-4">
+            <label htmlFor="tipo_interes" className="block text-sm font-medium mb-1">
+              Tipo de Interés *
+            </label>
+            <select
+              id="tipo_interes"
+              name="tipo_interes"
+              required
+              value={formData.tipo_interes}
+              onChange={handleChange}
+              className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black"
+            >
+              <option value="sobre_capital">Sobre capital inicial</option>
+              <option value="sobre_saldos">Sobre saldos decrecientes</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              {formData.tipo_interes === 'sobre_capital'
+                ? "Interés calculado sobre el monto total del préstamo"
+                : "Interés calculado sobre el saldo pendiente cada período"}
+            </p>
+          </div>
+
           {/* Grupo de campos de fecha y frecuencia */}
           <div className="grid grid-cols-2 gap-4">
             {/* Campo Fecha de Inicio */}
@@ -306,6 +364,22 @@ export default function NuevoPrestamo() {
                 <option value="mensual">Mensual</option>
               </select>
             </div>
+
+            
+          </div>
+          
+          <div>
+            <label htmlFor="descripcion" className="block text-sm font-medium mb-1">
+              Descripción
+            </label>
+            <textarea
+              id="descripcion"
+              name="descripcion"
+              placeholder="Descripción u observaciones"
+              value={formData.descripcion}
+              onChange={handleChange}
+              className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border  border-gray-600 focus:border-black focus:outline-none "
+            />
           </div>
 
           {/* Botón de enviar */}
