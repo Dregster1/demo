@@ -231,6 +231,172 @@ export default function EditarPrestamo() {
               className="w-full p-2 rounded bg-[#e6f2da] placeholder-gray-500 text-black border border-gray-600 focus:border-black focus:outline-none"
             />
           </div>
+
+          {/* Campo Tipo de Mora */}
+          <div className="mb-4">
+            <label htmlFor="tipo_mora" className="block text-sm font-medium mb-1">
+              Tipo de Mora *
+            </label>
+            <select
+              id="tipo_mora"
+              name="tipo_mora"
+              required
+              value={formData.tipo_mora}
+              onChange={handleChange}
+              className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black focus:border-black focus:outline-none"
+            >
+              <option value="diaria">Diaria</option>
+              <option value="mensual">Mensual</option>
+              <option value="anual">Anual</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              {formData.tipo_mora === 'diaria'
+                ? "La mora se calculará por día de atraso"
+                : formData.tipo_mora === 'mensual'
+                  ? "La mora se calculará por mes de atraso"
+                  : "La mora se calculará por año de atraso"}
+            </p>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Porcentaje de Mora (%)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              name="porcentaje_mora" // Agrega name para usar handleChange
+              value={formData.porcentaje_mora}
+              onChange={handleChange} // Usa el mismo manejador que los demás campos
+              className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black focus:border-black focus:outline-none placeholder-gray-500"
+              placeholder="Ej: 10"
+            />
+          </div>
+
+          {/* Grupo de campos numéricos */}
+          <div className="grid grid-cols-3 gap-4">
+            {/* Campo Monto */}
+            <div>
+              <label htmlFor="monto" className="block text-sm font-medium mb-1">
+                Monto (Q)
+              </label>
+              <input
+                id="monto"
+                name="monto"
+                type="number"
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+                required
+                value={formData.monto}
+                onChange={handleChange}
+                className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black placeholder-gray-500"
+              />
+            </div>
+
+            {/* Campo Interés */}
+            <div>
+              <label htmlFor="interes" className="block text-sm font-medium mb-1">
+                Interés (%)
+              </label>
+              <input
+                id="interes"
+                name="interes"
+                type="number"
+                placeholder="0.0"
+                min="0"
+                max="100"
+                step="0.1"
+                required
+                value={formData.interes}
+                onChange={handleChange}
+                className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black placeholder-gray-500"
+              />
+            </div>
+
+            {/* Campo Plazo */}
+            <div>
+              <label htmlFor="plazo" className="block text-sm font-medium mb-1">
+                Plazo (meses)
+              </label>
+              <input
+                id="plazo"
+                name="plazo"
+                type="number"
+                placeholder="0"
+                min="1"
+                required
+                value={formData.plazo}
+                onChange={handleChange}
+                className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black placeholder-gray-500"
+              />
+            </div>
+          </div>
+
+          {/* Campo Tipo de Interés */}
+          <div className="mb-4">
+            <label htmlFor="tipo_interes" className="block text-sm font-medium mb-1">
+              Tipo de Interés *
+            </label>
+            <select
+              id="tipo_interes"
+              name="tipo_interes"
+              required
+              value={formData.tipo_interes}
+              onChange={handleChange}
+              className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black"
+            >
+              <option value="sobre_capital">Sobre capital inicial</option>
+              <option value="sobre_saldos">Sobre saldos decrecientes</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              {formData.tipo_interes === 'sobre_capital'
+                ? "Interés calculado sobre el monto total del préstamo"
+                : "Interés calculado sobre el saldo pendiente cada período"}
+            </p>
+          </div>
+
+          {/* Grupo de campos de fecha y frecuencia */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Campo Fecha de Inicio */}
+            <div>
+              <label htmlFor="fecha_inicio" className="block text-sm font-medium mb-1">
+                Fecha de inicio *
+              </label>
+              <input
+                id="fecha_inicio"
+                name="fecha_inicio"
+                type="date"
+                required
+                value={formData.fecha_inicio}
+                onChange={handleChange}
+                className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black placeholder-gray-500 "
+              />
+            </div>
+
+            {/* Campo Frecuencia de Pago */}
+            <div>
+              <label htmlFor="frecuencia_pago" className="block text-sm font-medium mb-1">
+                Frecuencia de pago *
+              </label>
+              <select
+                id="frecuencia_pago"
+                name="frecuencia_pago"
+                required
+                value={formData.frecuencia_pago}
+                onChange={handleChange}
+                className="w-full p-2 rounded bg-[#e6f2da] border border-gray-600 text-black placeholder-gray-500"
+              >
+                <option value="diario">Diario</option>
+                <option value="semanal">Semanal</option>
+                <option value="quincenal">Quincenal</option>
+                <option value="mensual">Mensual</option>
+              </select>
+            </div>
+
+            
+          </div>
           
           <div>
             <label htmlFor="descripcion" className="block text-sm font-medium mb-1">

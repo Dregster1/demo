@@ -123,8 +123,8 @@ export default function Navbar() {
               { href: "/", text: "Inicio" },
               { href: "/prestamos", text: "Préstamos" },
               { href: "/prestamos/nuevo", text: "Nuevo Prestamo" },
-              { href: "/clientes", text: "Clientes" },
-              { href: "/clientes/nuevo", text: "Añadir cliente" },
+              { href: "/clientes", text: "Contactos" },
+              { href: "/clientes/nuevo", text: "Añadir contacto" },
               { href: "/balance", text: "Balance" },
               { href: "/balance/nuevo", text: "Añadir bienes" },
               { href: "/registro", text: "Registro"}

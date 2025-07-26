@@ -21,154 +21,155 @@ export default function ProyeccionPagos() {
     const [error, setError] = useState('');
     const [cargado, setCargado] = useState(false);
     const [inicializado, setInicializado] = useState(false);
+    const [pagosListos, setPagosListos] = useState(false);
 
 
 
-useEffect(() => {
-    if (!inicializado) {
-        const cargarDatosInicial = async () => {
-            try {
-                setLoading(true);
-                
-                // 1. Cargar préstamo
-                const { data: prestamoData, error: prestamoError } = await supabase
-                    .from('prestamos')
-                    .select('*')
-                    .eq('id', id)
-                    .single();
+    useEffect(() => {
+        if (!inicializado) {
+            const cargarDatosInicial = async () => {
+                try {
+                    setLoading(true);
 
-                if (prestamoError || !prestamoData) {
-                    throw prestamoError || new Error('Préstamo no encontrado');
-                }
+                    // 1. Cargar préstamo
+                    const { data: prestamoData, error: prestamoError } = await supabase
+                        .from('prestamos')
+                        .select('*')
+                        .eq('id', id)
+                        .single();
 
-                // 2. Verificar si ya hay pagos
-                const { data: pagosExistentes, error: pagosError } = await supabase
-                    .from('pagos')
-                    .select('*')
-                    .eq('prestamo_id', id)
-                    .order('numero', { ascending: true });
-
-                if (pagosError) throw pagosError;
-
-                let pagosFinales: Pago[] = [];
-
-                if (pagosExistentes && pagosExistentes.length > 0) {
-                    // Caso 1: Pagos existentes - verificar duplicados
-                    const pagosUnicos = eliminarDuplicados(pagosExistentes);
-                    pagosFinales = verificarYCalcularMora(pagosUnicos, prestamoData);
-                    
-                    // Actualizar en base de datos si hay cambios
-                    if (JSON.stringify(pagosExistentes) !== JSON.stringify(pagosFinales)) {
-                        const { error } = await supabase
-                            .from('pagos')
-                            .upsert(pagosFinales)
-                            .eq('prestamo_id', id);
-                        if (error) throw error;
+                    if (prestamoError || !prestamoData) {
+                        throw prestamoError || new Error('Préstamo no encontrado');
                     }
-                } else {
-                    // Caso 2: Generar nueva proyección
-                    const nuevaProyeccion = generarProyeccionPagos(prestamoData);
-                    pagosFinales = verificarYCalcularMora(nuevaProyeccion, prestamoData);
-                    
-                    // Insertar solo si no hay pagos existentes
-                    const { data: pagosInsertados, error } = await supabase
+
+                    // 2. Verificar si ya hay pagos
+                    const { data: pagosExistentes, error: pagosError } = await supabase
                         .from('pagos')
-                        .insert(pagosFinales)
-                        .select();
-                    
-                    if (error) throw error;
-                    if (pagosInsertados) pagosFinales = pagosInsertados;
+                        .select('*')
+                        .eq('prestamo_id', id)
+                        .order('numero', { ascending: true });
+
+                    if (pagosError) throw pagosError;
+
+                    let pagosFinales: Pago[] = [];
+
+                    if (pagosExistentes && pagosExistentes.length > 0) {
+                        // Caso 1: Pagos existentes - verificar duplicados
+                        const pagosUnicos = eliminarDuplicados(pagosExistentes);
+                        pagosFinales = verificarYCalcularMora(pagosUnicos, prestamoData);
+
+                        // Actualizar en base de datos si hay cambios
+                        if (JSON.stringify(pagosExistentes) !== JSON.stringify(pagosFinales)) {
+                            const { error } = await supabase
+                                .from('pagos')
+                                .upsert(pagosFinales)
+                                .eq('prestamo_id', id);
+                            if (error) throw error;
+                        }
+                    } else {
+                        // Caso 2: Generar nueva proyección
+                        const nuevaProyeccion = generarProyeccionPagos(prestamoData);
+                        pagosFinales = verificarYCalcularMora(nuevaProyeccion, prestamoData);
+
+                        // Insertar solo si no hay pagos existentes
+                        const { data: pagosInsertados, error } = await supabase
+                            .from('pagos')
+                            .insert(pagosFinales)
+                            .select();
+
+                        if (error) throw error;
+                        if (pagosInsertados) pagosFinales = pagosInsertados;
+                    }
+
+                    // Actualizar estados
+                    setPrestamo(prestamoData);
+                    setPagos(pagosFinales);
+                    await verificarEstadoPrestamo(id);
+
+                } catch (error) {
+                    console.error('Error al cargar datos:', error);
+                    setError(error instanceof Error ? error.message : 'Error desconocido');
+                } finally {
+                    setLoading(false);
+                    setInicializado(true);
                 }
+            };
 
-                // Actualizar estados
-                setPrestamo(prestamoData);
-                setPagos(pagosFinales);
-                await verificarEstadoPrestamo(id);
-
-            } catch (error) {
-                console.error('Error al cargar datos:', error);
-                setError(error instanceof Error ? error.message : 'Error desconocido');
-            } finally {
-                setLoading(false);
-                setInicializado(true);
-            }
-        };
-
-        cargarDatosInicial();
-    }
-}, [id, inicializado]);
-
-// Función para eliminar pagos duplicados
-const eliminarDuplicados = (pagos: Pago[]): Pago[] => {
-    const unicos: Pago[] = [];
-    const numerosVistos = new Set<number>();
-
-    for (const pago of pagos) {
-        if (!numerosVistos.has(pago.numero)) {
-            numerosVistos.add(pago.numero);
-            unicos.push(pago);
+            cargarDatosInicial();
         }
-    }
+    }, [id, inicializado]);
 
-    return unicos.sort((a, b) => a.numero - b.numero);
-};  
+    // Función para eliminar pagos duplicados
+    const eliminarDuplicados = (pagos: Pago[]): Pago[] => {
+        const unicos: Pago[] = [];
+        const numerosVistos = new Set<number>();
+
+        for (const pago of pagos) {
+            if (!numerosVistos.has(pago.numero)) {
+                numerosVistos.add(pago.numero);
+                unicos.push(pago);
+            }
+        }
+
+        return unicos.sort((a, b) => a.numero - b.numero);
+    };
 
 
     // Función para generar la proyección de pagos con mora
-  const generarProyeccionPagos = (prestamo: Prestamo): Pago[] => {
-    const pagos: Pago[] = [];
-    const fechaInicio = new Date(prestamo.fecha_inicio);
-    let fechaPago = new Date(fechaInicio);
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    const generarProyeccionPagos = (prestamo: Prestamo): Pago[] => {
+        const pagos: Pago[] = [];
+        const fechaInicio = new Date(prestamo.fecha_inicio);
+        let fechaPago = new Date(fechaInicio);
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
 
-    const totalPagos = calcularTotalPagos(prestamo.plazo, prestamo.frecuencia_pago);
-    let saldoPendiente = prestamo.monto;
+        const totalPagos = calcularTotalPagos(prestamo.plazo, prestamo.frecuencia_pago);
+        let saldoPendiente = prestamo.monto;
 
-    for (let i = 1; i <= totalPagos; i++) {
-        // Calcular fecha según frecuencia
-        switch (prestamo.frecuencia_pago) {
-            case 'diario': fechaPago.setDate(fechaPago.getDate() + 1); break;
-            case 'semanal': fechaPago.setDate(fechaPago.getDate() + 7); break;
-            case 'quincenal': fechaPago.setDate(fechaPago.getDate() + 15); break;
-            case 'mensual': fechaPago.setMonth(fechaPago.getMonth() + 1); break;
+        for (let i = 1; i <= totalPagos; i++) {
+            // Calcular fecha según frecuencia
+            switch (prestamo.frecuencia_pago) {
+                case 'diario': fechaPago.setDate(fechaPago.getDate() + 1); break;
+                case 'semanal': fechaPago.setDate(fechaPago.getDate() + 7); break;
+                case 'quincenal': fechaPago.setDate(fechaPago.getDate() + 15); break;
+                case 'mensual': fechaPago.setMonth(fechaPago.getMonth() + 1); break;
+            }
+
+            // Calcular componentes del pago
+            let capitalPago = prestamo.monto / totalPagos;
+            let interesPago = 0;
+
+            if (prestamo.tipo_interes === 'sobre_saldos') {
+                interesPago = saldoPendiente * (prestamo.interes / 100) /
+                    (prestamo.frecuencia_pago === 'mensual' ? 1 :
+                        prestamo.frecuencia_pago === 'quincenal' ? 2 :
+                            prestamo.frecuencia_pago === 'semanal' ? 4 : 30);
+                saldoPendiente -= capitalPago;
+            } else {
+                interesPago = (prestamo.monto * (prestamo.interes / 100)) / totalPagos;
+            }
+
+            const montoPago = capitalPago + interesPago;
+            const fechaPagoNormalizada = new Date(fechaPago);
+            fechaPagoNormalizada.setHours(0, 0, 0, 0);
+            const estado = fechaPagoNormalizada < hoy ? 'vencido' : 'pendiente';
+
+            pagos.push({
+                id: crypto.randomUUID(), // Generar ID único aquí
+                numero: i,
+                fecha: fechaPago.toISOString().split('T')[0],
+                monto: parseFloat(montoPago.toFixed(2)),
+                capital: parseFloat(capitalPago.toFixed(2)),
+                interes: parseFloat(interesPago.toFixed(2)),
+                estado,
+                prestamo_id: prestamo.id,
+                es_mora: false,
+                fecha_pago: null,
+            });
         }
 
-        // Calcular componentes del pago
-        let capitalPago = prestamo.monto / totalPagos;
-        let interesPago = 0;
-
-        if (prestamo.tipo_interes === 'sobre_saldos') {
-            interesPago = saldoPendiente * (prestamo.interes / 100) /
-                (prestamo.frecuencia_pago === 'mensual' ? 1 :
-                    prestamo.frecuencia_pago === 'quincenal' ? 2 :
-                        prestamo.frecuencia_pago === 'semanal' ? 4 : 30);
-            saldoPendiente -= capitalPago;
-        } else {
-            interesPago = (prestamo.monto * (prestamo.interes / 100)) / totalPagos;
-        }
-
-        const montoPago = capitalPago + interesPago;
-        const fechaPagoNormalizada = new Date(fechaPago);
-        fechaPagoNormalizada.setHours(0, 0, 0, 0);
-        const estado = fechaPagoNormalizada < hoy ? 'vencido' : 'pendiente';
-
-        pagos.push({
-            id: crypto.randomUUID(), // Generar ID único aquí
-            numero: i,
-            fecha: fechaPago.toISOString().split('T')[0],
-            monto: parseFloat(montoPago.toFixed(2)),
-            capital: parseFloat(capitalPago.toFixed(2)),
-            interes: parseFloat(interesPago.toFixed(2)),
-            estado,
-            prestamo_id: prestamo.id,
-            es_mora: false,
-            fecha_pago: null,
-        });
-    }
-
-    return pagos;
-};
+        return pagos;
+    };
 
 
 
@@ -356,6 +357,147 @@ const eliminarDuplicados = (pagos: Pago[]): Pago[] => {
         });
     };
 
+    // En tu página de proyección ([id]/proyeccion/page.tsx)
+    useEffect(() => {
+        const verificarYActualizarProyeccion = async () => {
+            try {
+                setLoading(true);
+                setPagosListos(false); // Bloquea el PDF temporalmente
+
+                // 1. Obtener préstamo actual
+                const { data: prestamoActual, error: errorPrestamo } = await supabase
+                    .from('prestamos')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
+
+                if (errorPrestamo || !prestamoActual) throw errorPrestamo || new Error('Préstamo no encontrado');
+
+                // 2. Obtener historial
+                const { data: historial, error: errorHistorial } = await supabase
+                    .from('prestamos_historial')
+                    .select('parametros_originales')
+                    .eq('prestamo_id', id)
+                    .order('fecha', { ascending: false })
+                    .limit(1);
+
+                // Si no hay historial, guardar los parámetros actuales como referencia
+                if (!historial || historial.length === 0) {
+                    await guardarParametrosOriginales(prestamoActual);
+                    setPagosListos(true); // ✅ Muy importante activar aquí también
+                    return;
+                }
+
+                const parametrosOriginales = historial[0].parametros_originales;
+
+                // 3. Comparar parámetros
+                const camposFinancieros = ['monto', 'interes', 'plazo', 'frecuencia_pago', 'tipo_interes'];
+                const hayCambios = camposFinancieros.some(
+                    campo => prestamoActual[campo] !== parametrosOriginales[campo]
+                );
+
+                // 4. Si hay cambios, regenerar
+                if (hayCambios) {
+                    await regenerarProyeccion(prestamoActual, parametrosOriginales);
+                    await guardarParametrosOriginales(prestamoActual);
+                } else {
+                    setPagosListos(true); // ✅ Activar si no se regeneró nada
+                }
+
+            } catch (error) {
+                console.error('Error al verificar proyección:', error);
+                setPagosListos(false); // en caso de error
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (!cargado) {
+            verificarYActualizarProyeccion().then(() => setCargado(true));
+        }
+    }, [cargado, id]);
+
+
+    const guardarParametrosOriginales = async (prestamo: Prestamo) => {
+        const camposRelevantes = {
+            monto: prestamo.monto,
+            interes: prestamo.interes,
+            plazo: prestamo.plazo,
+            frecuencia_pago: prestamo.frecuencia_pago,
+            tipo_interes: prestamo.tipo_interes
+        };
+
+        await supabase.from('prestamos_historial').upsert({
+            prestamo_id: prestamo.id,
+            parametros_originales: camposRelevantes,
+            fecha: new Date().toISOString()
+        });
+    };
+
+    const regenerarProyeccion = async (prestamoActual: Prestamo, parametrosOriginales: any) => {
+        try {
+            // 1. Desactivar estado listo antes de comenzar
+            setPagosListos(false);
+
+            // 2. Obtener pagos existentes para preservar los pagados
+            const { data: pagosExistentes } = await supabase
+                .from('pagos')
+                .select('*')
+                .eq('prestamo_id', prestamoActual.id);
+
+            // 3. Generar nueva proyección
+            const nuevaProyeccion = generarProyeccionPagos(prestamoActual);
+
+            // 4. Preservar pagos realizados y mantener números de cuota
+            const pagosActualizados = nuevaProyeccion.map(nuevoPago => {
+                const pagoExistente = pagosExistentes?.find(
+                    p => p.numero === nuevoPago.numero && p.estado === 'pagado'
+                );
+                return pagoExistente
+                    ? { ...pagoExistente, monto: nuevoPago.monto } // Mantener datos del pago pero actualizar monto
+                    : nuevoPago;
+            });
+
+            // 5. Reemplazar proyección completa en la base de datos
+            await supabase.from('pagos').delete().eq('prestamo_id', prestamoActual.id);
+            const { error } = await supabase.from('pagos').insert(pagosActualizados);
+            if (error) throw error;
+
+            // 6. Filtrar pagos válidos y actualizarlos en estado local
+            const pagosSanitizados = pagosActualizados.filter(p =>
+                typeof p.numero === 'number' &&
+                typeof p.monto === 'number' &&
+                (typeof p.fecha === 'string' || p.fecha instanceof Date)
+            );
+
+            setPagos(pagosSanitizados);
+            setPagosListos(true);
+        } catch (error) {
+            console.error('Error al regenerar proyección:', error);
+            // En caso de error, evitar que PDF intente renderizar
+            setPagos([]);
+            setPagosListos(false);
+        }
+    };
+
+    const calcularTotalPendiente = (prestamo: Prestamo, pagos: Pago[]): number => {
+        // 1. Calcular el monto total original (capital + interés)
+        const totalOriginal = prestamo.monto * (1 + prestamo.interes / 100);
+
+        // 2. Sumar moras de pagos pendientes/vencidos
+        const totalMora = pagos
+            .filter(p => p.estado !== 'pagado')
+            .reduce((sum, p) => sum + (p.monto_mora || 0), 0);
+
+        // 3. Restar lo ya pagado (capital + interés + mora si aplica)
+        const totalPagado = pagos
+            .filter(p => p.estado === 'pagado')
+            .reduce((sum, p) => sum + p.monto + (p.monto_mora || 0), 0);
+
+        // El total pendiente es: (Total original + Moras) - Lo ya pagado
+        return (totalOriginal + totalMora) - totalPagado;
+    };
+
 
     if (loading) {
         return (
@@ -400,8 +542,10 @@ const eliminarDuplicados = (pagos: Pago[]): Pago[] => {
                         Proyección: {prestamo.nombre}
                     </h1>
                     <GenerarEstadoCliente
+                        key={prestamo.id + '-' + pagos.length} // 🔁 fuerza re-render
                         prestamo={prestamo}
                         pagos={pagos}
+                        pagosListos={pagosListos}
                         className="mt-4"
                     />
                     <Link
@@ -437,17 +581,38 @@ const eliminarDuplicados = (pagos: Pago[]): Pago[] => {
                                 ) : 'Sin mora'}
                             </p>
                         </div>
-                        <div className="break-words">
-                            <p className="text-gray-400 text-xs sm:text-sm">Total a pagar</p>
-                            <p className="text-lg sm:text-xl font-semibold">
-                                Q{(
-                                    prestamo.monto * (1 + prestamo.interes / 100) +
-                                    pagos
-                                        .filter(p => !p.es_mora) // Excluir el pago de mora adicional
-                                        .reduce((total, p) => total + (p.monto_mora || 0), 0)
-                                ).toFixed(2)}
-                            </p>
+                        <div className="space-y-1">
+                            <div className="flex justify-between">
+                                <span className="text-gray-400">Capital + Interés:</span>
+                                <span>Q{(prestamo.monto * (1 + prestamo.interes / 100)).toFixed(2)}</span>
+                            </div>
+
+                            {pagos.some(p => p.monto_mora) && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-400">Mora acumulada:</span>
+                                    <span className="text-red-400">
+                                        +Q{pagos.filter(p => p.estado !== 'pagado')
+                                            .reduce((sum, p) => sum + (p.monto_mora || 0), 0).toFixed(2)}
+                                    </span>
+                                </div>
+                            )}
+
+                            {pagos.some(p => p.estado === 'pagado') && (
+                                <div className="flex justify-between">
+                                    <span className="text-gray-400">Pagado:</span>
+                                    <span className="text-green-400">
+                                        Q{pagos.filter(p => p.estado === 'pagado')
+                                            .reduce((sum, p) => sum + p.monto + (p.monto_mora || 0), 0).toFixed(2)}
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="border-t pt-1 mt-1 flex justify-between font-semibold">
+                                <span className="text-gray-400">Total pendiente:</span>
+                                <span>Q{calcularTotalPendiente(prestamo, pagos).toFixed(2)}</span>
+                            </div>
                         </div>
+
                     </div>
                 </div>
 
@@ -487,10 +652,10 @@ const eliminarDuplicados = (pagos: Pago[]): Pago[] => {
                                     <p className="text-gray-400">Monto</p>
                                     <p>Q{pago.monto.toFixed(2)}</p>
                                     {pago.monto_mora && (
-                                            <span className="block text-xs text-red-500">
-                                                +Q{pago.monto_mora.toFixed(2)} mora
-                                            </span>
-                                        )}
+                                        <span className="block text-xs text-red-500">
+                                            +Q{pago.monto_mora.toFixed(2)} mora
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 
@@ -499,7 +664,7 @@ const eliminarDuplicados = (pagos: Pago[]): Pago[] => {
                                     value={pago.estado}
                                     onChange={(e) => cambiarEstadoPago(index, e.target.value as any)}
                                     className="w-full bg-gray-700 text-white p-1 rounded text-xs"
-                                    
+
                                 >
                                     <option value="pendiente">Pendiente</option>
                                     <option value="pagado">Pagado</option>
@@ -592,7 +757,7 @@ const eliminarDuplicados = (pagos: Pago[]): Pago[] => {
                                             value={pago.estado}
                                             onChange={(e) => cambiarEstadoPago(index, e.target.value as any)}
                                             className="bg-gray-700 text-white p-1 rounded text-sm"
-                                            
+
                                         >
                                             <option value="pendiente">Pendiente</option>
                                             <option value="pagado">Pagado</option>

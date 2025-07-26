@@ -79,14 +79,14 @@ export default function ListaClientes() {
 
     } catch (err: any) {
       console.error('Error al obtener clientes:', err);
-      setError(err.message || 'Error al cargar los clientes');
+      setError(err.message || 'Error al cargar los contactos');
     } finally {
       setLoading(false);
     }
   };
 
   const handleEliminar = async (id: string) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar este cliente?')) {
+    if (!confirm('¿Estás seguro de que deseas eliminar este contacto?')) {
       return;
     }
 
@@ -101,8 +101,8 @@ export default function ListaClientes() {
 
       setClientes(clientes.filter(c => c.id !== id));
     } catch (err: any) {
-      console.error('Error al eliminar cliente:', err);
-      setError(err.message || 'Error al eliminar el cliente');
+      console.error('Error al eliminar contacto:', err);
+      setError(err.message || 'Error al eliminar el contacto');
     } finally {
       setDeletingId(null);
     }
@@ -155,7 +155,7 @@ export default function ListaClientes() {
   if (error) {
     return (
       <main className="p-6 bg-gray-900 min-h-screen text-white">
-        <h1 className="text-3xl font-semibold mb-6 text-center">Lista de Clientes</h1>
+        <h1 className="text-3xl font-semibold mb-6 text-center">Lista de Contactos</h1>
         <div className="text-red-400 text-center mb-4">{error}</div>
         <button
           onClick={obtenerClientes}
@@ -170,7 +170,7 @@ export default function ListaClientes() {
   return (
     <main className="p-6 bg-[#a1b98a] min-h-screen text-white">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-semibold">Lista de Clientes</h1>
+        <h1 className="text-3xl font-semibold">Lista de Contactos</h1>
         <Link
           href="/clientes/nuevo"
           className="bg-green-700 hover:bg-green-900 text-white px-4 py-2 rounded"
@@ -281,7 +281,7 @@ export default function ListaClientes() {
           ))
         ) : (
           <div className="col-span-full text-center text-white py-8">
-            {busquedaActiva ? 'No se encontraron clientes' : 'No hay clientes registrados'}
+            {busquedaActiva ? 'No se encontraron contactos' : 'No hay contactos registrados'}
           </div>
         )}
       </div>

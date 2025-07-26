@@ -59,7 +59,7 @@ export default function NuevoCliente() {
       setTimeout(() => router.push('/clientes'), 1500);
 
     } catch (err: any) {
-      console.error('Error al guardar cliente:', {
+      console.error('Error al guardar contacto:', {
         error: err,
         message: err.message,
         supabaseError: err.code
@@ -76,7 +76,7 @@ export default function NuevoCliente() {
         onSubmit={handleSubmit}
         className="bg-[#1f2d1b] p-6 rounded-lg w-full max-w-md shadow-lg space-y-4 border border-gray-700"
       >
-        <h1 className="text-2xl font-bold text-center">Nuevo Cliente</h1>
+        <h1 className="text-2xl font-bold text-center">Nuevo Contacto</h1>
 
         <div className="space-y-4">
           {/* Nombre */}

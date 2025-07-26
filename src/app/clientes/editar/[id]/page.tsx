@@ -31,7 +31,7 @@ export default function EditarCliente() {
           .single();
 
         if (error) throw error;
-        if (!data) throw new Error('Cliente no encontrado');
+        if (!data) throw new Error('Contacto no encontrado');
 
         setFormData({
           nombre: data.nombre,
@@ -45,7 +45,7 @@ export default function EditarCliente() {
 
       } catch (error: any) {
         console.error('Error al cargar cliente:', error);
-        setMensaje(`❌ Error: ${error.message || 'No se pudo cargar el cliente'}`);
+        setMensaje(`❌ Error: ${error.message || 'No se pudo cargar el contacto'}`);
       } finally {
         setIsLoading(false);
       }
@@ -88,11 +88,11 @@ export default function EditarCliente() {
 
       if (error) throw error;
 
-      setMensaje('✅ Cliente actualizado correctamente');
+      setMensaje('✅ Contacto actualizado correctamente');
       setTimeout(() => router.push('/clientes'), 1500);
 
     } catch (error: any) {
-      console.error('Error al actualizar cliente:', error);
+      console.error('Error al actualizar contacto:', error);
       setMensaje(`❌ Error: ${error.message || 'Ocurrió un error al actualizar'}`);
     } finally {
       setIsLoading(false);
@@ -105,7 +105,7 @@ export default function EditarCliente() {
         onSubmit={handleSubmit}
         className="bg-[#1f2d1b] p-6 rounded-lg w-full max-w-md shadow-lg space-y-4 border border-gray-700"
       >
-        <h1 className="text-2xl font-bold text-center">Editar Cliente</h1>
+        <h1 className="text-2xl font-bold text-center">Editar Contacto</h1>
 
         <div className="space-y-4">
           <div className="space-y-4">
